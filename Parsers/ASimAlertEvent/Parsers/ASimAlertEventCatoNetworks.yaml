@@ -1,0 +1,226 @@
+Description: "Normalizes Cato Cloud events to the ASIM AlertEvent schema."
+Parser:
+  Title: "Cato Cloud AlertEvent parser"
+  Version: "3.1.0"
+  LastUpdated: "Nov 23, 2026"
+Product:
+  Name: "Cato Cloud"
+Normalization:
+  Schema: "AlertEvent"
+  Version: "1.0.0"
+References:
+  -
+    Title: "ASIM Alert Event Schema"
+    Link: "https://aka.ms/ASimAlertEventDoc"
+  -
+    Title: "ASIM"
+    Link: "https://aka.ms/AboutASIM"
+ParserName: "ASimAlertEventCato_CatoNetworksEvents_CL"
+EquivalentBuiltInParser: "_ASim_AlertEvent_Cato"
+ParserParams:
+  -
+    Name: "pack"
+    Type: "bool"
+    Default: "false"
+  -
+    Name: "disabled"
+    Type: "bool"
+    Default: "false"
+ParserQuery: |-
+  let parser=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), ipaddr_has_any_prefix:dynamic=dynamic([]), hostname_has_any:dynamic=dynamic([]), username_has_any:dynamic=dynamic([]), attacktactics_has_any:dynamic=dynamic([]), attacktechniques_has_any:dynamic=dynamic([]), threatcategory_has_any:dynamic=dynamic([]), alertverdict_has_any:dynamic=dynamic([]), eventseverity_has_any:dynamic=dynamic([]), disabled:bool=false, pack:bool=false){
+  CatoNetworksEvents_CL
+  | where not(disabled)
+  // time is epoch milliseconds; ARM's DCR stores that same clock as TimeGenerated.
+  // Select the stored column only when the raw time column is absent, never time_str.
+  | where tostring(column_ifexists("event_sub_type", "")) != "Flow"
+  | where tostring(column_ifexists("source", "")) != "cato:hec:flows"
+      and tostring(column_ifexists("sourcetype", "")) != "cato:hec:flows"
+      and tostring(column_ifexists("Type", "")) != "cato:hec:flows"
+  | extend _CatoCommonRawCount = column_ifexists("event_count", dynamic(null)),
+      _CatoCommonClock = column_ifexists("time",
+          datetime_diff("millisecond", column_ifexists("TimeGenerated", datetime(null)), datetime(1970-01-01))),
+      _CatoCommonExtra = todynamic(column_ifexists("AdditionalFields", "{}"))
+  | extend _CatoCommonCountText = tostring(_CatoCommonRawCount),
+      _CatoCommonCount = tolong(_CatoCommonRawCount),
+      _CatoCommonSourceTime = unixtime_milliseconds_todatetime(tolong(tostring(_CatoCommonClock)))
+  | where isnull(_CatoCommonRawCount)
+      or (_CatoCommonCountText matches regex @"^[0-9]+$" and _CatoCommonCount between (1 .. 2147483647))
+  | where isnotnull(_CatoCommonSourceTime)
+  | where (isnull(starttime) or _CatoCommonSourceTime >= starttime)
+      and (isnull(endtime) or _CatoCommonSourceTime <= endtime)
+  | extend
+      TimeGenerated = _CatoCommonSourceTime,
+      EventStartTime = _CatoCommonSourceTime,
+      EventEndTime = _CatoCommonSourceTime,
+      EventCount = toint(coalesce(_CatoCommonCount, long(1))),
+      EventVendor = "Cato Networks",
+      EventProduct = "Cato Cloud",
+      EventSchemaVersion = "1.0.0",
+      EventOriginalType = tostring(column_ifexists("event_type", "")),
+      EventOriginalSubType = tostring(column_ifexists("event_sub_type", "")),
+      EventOriginalUid = tostring(column_ifexists("event_id", "")),
+      EventUid = tostring(column_ifexists("_ItemId", "")),
+      AdditionalFields = iff(gettype(_CatoCommonExtra) == "dictionary", _CatoCommonExtra, dynamic({})),
+      Dvc = "Cato Cloud",
+      DvcScopeId = tostring(column_ifexists("account_id", "")),
+      DvcScope = tostring(column_ifexists("account_name", ""))
+  | extend _CatoCommonAuthenticated = EventOriginalType == "Connectivity" and EventOriginalSubType == "Authenticated",
+      _CatoCommonPopScope = EventOriginalType == "Security" and EventOriginalSubType in (
+          "Internet Firewall", "WAN Firewall", "LAN Firewall", "IPS", "Suspicious Activity",
+          "Dynamic Prevention", "DNS Protection", "Agentic Threat Prevention", "Private Access Policy",
+          "RPF", "Anti Malware", "Apps Security", "Misclassification", "NG Anti Malware", "SDP Activity", "TLS")
+  | extend EventMessage = iff(_CatoCommonAuthenticated
+          or (EventOriginalType == "Security" and EventOriginalSubType in ("Data Security Alert", "Email Security Alert")),
+          tostring(column_ifexists("event_message", "")), ""),
+      DvcOriginalAction = iff(_CatoCommonAuthenticated
+          or (EventOriginalType == "System" and EventOriginalSubType == "Audit")
+          or (EventOriginalType == "Security" and EventOriginalSubType in (
+              "Internet Firewall", "WAN Firewall", "LAN Firewall", "IPS", "Suspicious Activity",
+              "Dynamic Prevention", "DNS Protection", "Agentic Threat Prevention", "Private Access Policy",
+              "RPF", "Anti Malware", "Apps Security", "NG Anti Malware", "SDP Activity", "TLS",
+              "SaaS Security API Anti Malware", "SaaS Security API Data Protection", "Endpoint Protection")),
+          tostring(column_ifexists("action", "")), ""),
+      AdditionalFields = bag_merge(AdditionalFields,
+          iff((_CatoCommonAuthenticated or _CatoCommonPopScope) and isnotempty(tostring(column_ifexists("pop_name", ""))),
+              bag_pack("CatoPopName", tostring(column_ifexists("pop_name", ""))), dynamic({})))
+  | project-away _CatoCommon*
+  // ISO 3166-1 alpha-2 allowlist (tzdata iso3166.tab, ISO/TC 46 N1127, 2024-02-29).
+  // Cato's GeoIP country codes are alpha-2; unknown values stay raw, not normalized.
+  | extend _CatoIsoCountryCodes = dynamic({"AD":1,"AE":1,"AF":1,"AG":1,"AI":1,"AL":1,"AM":1,"AO":1,"AQ":1,"AR":1,"AS":1,"AT":1,"AU":1,"AW":1,"AX":1,"AZ":1,"BA":1,"BB":1,"BD":1,"BE":1,"BF":1,"BG":1,"BH":1,"BI":1,"BJ":1,"BL":1,"BM":1,"BN":1,"BO":1,"BQ":1,"BR":1,"BS":1,"BT":1,"BV":1,"BW":1,"BY":1,"BZ":1,"CA":1,"CC":1,"CD":1,"CF":1,"CG":1,"CH":1,"CI":1,"CK":1,"CL":1,"CM":1,"CN":1,"CO":1,"CR":1,"CU":1,"CV":1,"CW":1,"CX":1,"CY":1,"CZ":1,"DE":1,"DJ":1,"DK":1,"DM":1,"DO":1,"DZ":1,"EC":1,"EE":1,"EG":1,"EH":1,"ER":1,"ES":1,"ET":1,"FI":1,"FJ":1,"FK":1,"FM":1,"FO":1,"FR":1,"GA":1,"GB":1,"GD":1,"GE":1,"GF":1,"GG":1,"GH":1,"GI":1,"GL":1,"GM":1,"GN":1,"GP":1,"GQ":1,"GR":1,"GS":1,"GT":1,"GU":1,"GW":1,"GY":1,"HK":1,"HM":1,"HN":1,"HR":1,"HT":1,"HU":1,"ID":1,"IE":1,"IL":1,"IM":1,"IN":1,"IO":1,"IQ":1,"IR":1,"IS":1,"IT":1,"JE":1,"JM":1,"JO":1,"JP":1,"KE":1,"KG":1,"KH":1,"KI":1,"KM":1,"KN":1,"KP":1,"KR":1,"KW":1,"KY":1,"KZ":1,"LA":1,"LB":1,"LC":1,"LI":1,"LK":1,"LR":1,"LS":1,"LT":1,"LU":1,"LV":1,"LY":1,"MA":1,"MC":1,"MD":1,"ME":1,"MF":1,"MG":1,"MH":1,"MK":1,"ML":1,"MM":1,"MN":1,"MO":1,"MP":1,"MQ":1,"MR":1,"MS":1,"MT":1,"MU":1,"MV":1,"MW":1,"MX":1,"MY":1,"MZ":1,"NA":1,"NC":1,"NE":1,"NF":1,"NG":1,"NI":1,"NL":1,"NO":1,"NP":1,"NR":1,"NU":1,"NZ":1,"OM":1,"PA":1,"PE":1,"PF":1,"PG":1,"PH":1,"PK":1,"PL":1,"PM":1,"PN":1,"PR":1,"PS":1,"PT":1,"PW":1,"PY":1,"QA":1,"RE":1,"RO":1,"RS":1,"RU":1,"RW":1,"SA":1,"SB":1,"SC":1,"SD":1,"SE":1,"SG":1,"SH":1,"SI":1,"SJ":1,"SK":1,"SL":1,"SM":1,"SN":1,"SO":1,"SR":1,"SS":1,"ST":1,"SV":1,"SX":1,"SY":1,"SZ":1,"TC":1,"TD":1,"TF":1,"TG":1,"TH":1,"TJ":1,"TK":1,"TL":1,"TM":1,"TN":1,"TO":1,"TR":1,"TT":1,"TV":1,"TW":1,"TZ":1,"UA":1,"UG":1,"UM":1,"US":1,"UY":1,"UZ":1,"VA":1,"VC":1,"VE":1,"VG":1,"VI":1,"VN":1,"VU":1,"WF":1,"WS":1,"YE":1,"YT":1,"ZA":1,"ZM":1,"ZW":1})
+  | extend _CatoSecurity = EventOriginalType == 'Security',
+      _CatoXdr = EventOriginalType == 'Detection and Response',
+      _CatoSystemAlert = EventOriginalType == 'System' and EventOriginalSubType == 'Alert Triggered',
+      _CatoEventId = iff(gettype(column_ifexists('event_id', '')) == 'string', tostring(column_ifexists('event_id', '')), '')
+  // Apply the conservative Security baseline; D&R and System alerts remain explicit extensions.
+  | where (_CatoSecurity and (
+          (EventOriginalSubType in ('Anti Malware', 'SaaS Security API Anti Malware')
+              and gettype(column_ifexists('threat_name', '')) == 'string'
+              and isnotempty(trim(@'\s+', tostring(column_ifexists('threat_name', '')))))
+          or (EventOriginalSubType == 'Endpoint Protection' and (
+              (gettype(column_ifexists('threat_name', '')) == 'string'
+                  and isnotempty(trim(@'\s+', tostring(column_ifexists('threat_name', '')))))
+              or (gettype(column_ifexists('detection_name', '')) == 'string'
+                  and isnotempty(trim(@'\s+', tostring(column_ifexists('detection_name', '')))))))
+          or EventOriginalSubType in ('Data Security Alert', 'Email Security Alert')))
+      or _CatoXdr or _CatoSystemAlert
+  | where isnotempty(trim(@'\s+', _CatoEventId))
+  | extend _CatoXdrKnown = _CatoXdr and EventOriginalSubType in (
+          'XDR Account Operations', 'XDR Anomaly', 'XDR CDR', 'XDR Endpoint',
+          'XDR Generic Producer', 'XDR Network', 'XDR Predictive', 'XDR Threat'),
+      _CatoXdrUser = _CatoXdr and EventOriginalSubType in ('XDR Anomaly', 'XDR Endpoint', 'XDR Threat'),
+      _CatoXdrThreat = _CatoXdr and EventOriginalSubType in (
+          'XDR Anomaly', 'XDR CDR', 'XDR Endpoint', 'XDR Generic Producer', 'XDR Threat'),
+      _CatoAntiMalware = _CatoSecurity and EventOriginalSubType == 'Anti Malware',
+      _CatoSaasMalware = _CatoSecurity and EventOriginalSubType == 'SaaS Security API Anti Malware',
+      _CatoEndpoint = _CatoSecurity and EventOriginalSubType == 'Endpoint Protection'
+  // Admission does not imply field availability: each scope follows its detailed mapping row.
+  | extend _CatoFileScope = _CatoAntiMalware or _CatoSaasMalware or _CatoEndpoint or _CatoSystemAlert,
+      _CatoUserScope = _CatoAntiMalware or _CatoSaasMalware or _CatoEndpoint or _CatoXdrUser or _CatoSystemAlert,
+      _CatoDeviceScope = _CatoAntiMalware or _CatoEndpoint or _CatoXdrUser or _CatoSystemAlert,
+      _CatoRuleScope = _CatoAntiMalware or _CatoSaasMalware or _CatoXdrKnown or _CatoSystemAlert,
+      _CatoHostIpScope = _CatoAntiMalware or (_CatoXdr and EventOriginalSubType == 'XDR Network') or _CatoSystemAlert,
+      _CatoNetworkSrcScope = _CatoAntiMalware or _CatoSaasMalware or _CatoXdrUser or _CatoSystemAlert,
+      _CatoNetworkDstScope = _CatoAntiMalware or _CatoSystemAlert
+  | extend EventSchema = 'AlertEvent', EventType = 'Alert',
+      EventUid = _CatoEventId, EventOriginalUid = _CatoEventId,
+      EventSubType = case(_CatoSecurity, 'Threat',
+          _CatoXdr and EventOriginalSubType == 'XDR Anomaly', 'Anomaly',
+          _CatoSystemAlert or (_CatoXdr and EventOriginalSubType in ('XDR Account Operations', 'XDR Network')), 'Compliance Violation',
+          'Suspicious Activity'),
+      EventMessage = iff((_CatoXdrKnown or _CatoSystemAlert
+          or (_CatoSecurity and EventOriginalSubType in ('Data Security Alert', 'Email Security Alert')))
+          and gettype(column_ifexists('event_message', '')) == 'string', tostring(column_ifexists('event_message', '')), ''),
+      _CatoIndication = iff(_CatoXdrKnown and gettype(column_ifexists('indication', '')) == 'string',
+          tostring(column_ifexists('indication', '')), ''),
+      RuleName = iff(_CatoRuleScope and gettype(column_ifexists('rule_name', '')) == 'string',
+          tostring(column_ifexists('rule_name', '')), ''),
+      ThreatName = iff((_CatoAntiMalware or _CatoSaasMalware or _CatoEndpoint or _CatoXdrThreat or _CatoSystemAlert)
+          and gettype(column_ifexists('threat_name', '')) == 'string', tostring(column_ifexists('threat_name', '')), ''),
+      ThreatOriginalCategory = iff((_CatoEndpoint or _CatoXdrThreat or _CatoSystemAlert)
+          and gettype(column_ifexists('threat_type', '')) == 'string', tostring(column_ifexists('threat_type', '')), ''),
+      Username = iff(_CatoUserScope and gettype(column_ifexists('user_name', '')) == 'string',
+          tostring(column_ifexists('user_name', '')), ''),
+      UserId = iff(_CatoUserScope and gettype(column_ifexists('user_id', '')) in ('string', 'long', 'int'),
+          tostring(column_ifexists('user_id', '')), ''),
+      _CatoFileSize = iff(_CatoFileScope, tostring(column_ifexists('file_size', '')), ''),
+      _CatoRemediation = iff((_CatoXdrUser or (_CatoSecurity and EventOriginalSubType == 'Data Security Alert'))
+          and gettype(column_ifexists('recommended_actions', '')) in ('array', 'string'),
+          parse_json(tostring(column_ifexists('recommended_actions', ''))), dynamic(null)),
+      _CatoClassification = iff(_CatoSecurity and EventOriginalSubType == 'Email Security Alert'
+          and gettype(column_ifexists('classification', '')) == 'string', tostring(column_ifexists('classification', '')), ''),
+      _CatoHostIp = iff(_CatoHostIpScope, tostring(column_ifexists('host_ip', '')), ''),
+      _CatoHostMac = iff(_CatoDeviceScope, tostring(column_ifexists('host_mac', '')), ''),
+      _CatoProcessId = iff(_CatoEndpoint, tostring(column_ifexists('src_pid', '')), '')
+  | extend AlertName = coalesce(_CatoIndication, RuleName),
+      ThreatCategory = case(
+          ThreatOriginalCategory =~ 'Malware', 'Malware', ThreatOriginalCategory =~ 'Ransomware', 'Ransomware',
+          ThreatOriginalCategory =~ 'Trojan', 'Trojan', ThreatOriginalCategory =~ 'Virus', 'Virus',
+          ThreatOriginalCategory =~ 'Worm', 'Worm', ThreatOriginalCategory =~ 'Adware', 'Adware',
+          ThreatOriginalCategory =~ 'Spyware', 'Spyware', ThreatOriginalCategory =~ 'Rootkit', 'Rootkit',
+          ThreatOriginalCategory =~ 'Cryptominer', 'Cryptominer', ThreatOriginalCategory =~ 'Phishing', 'Phishing',
+          ThreatOriginalCategory =~ 'Spam', 'Spam', ThreatOriginalCategory =~ 'MaliciousUrl', 'MaliciousUrl',
+          ThreatOriginalCategory =~ 'Spoofing', 'Spoofing',
+          ThreatOriginalCategory =~ 'Security Policy Violation', 'Security Policy Violation',
+          isempty(ThreatOriginalCategory), '', 'Unknown'),
+      UsernameType = case(isempty(Username), '',
+          Username matches regex @'^[^\s@]+@[^\s@]+\.[^\s@]+$', 'UPN',
+          Username matches regex @'^[^\\]+\\[^\\]+$', 'Windows',
+          Username matches regex @'(?i)^(CN|UID)=.+,.+=.+$', 'DN', 'Simple'),
+      FileName = iff(_CatoFileScope and gettype(column_ifexists('file_name', '')) == 'string',
+          extract(@'([^/\\]+)$', 1, tostring(column_ifexists('file_name', ''))), ''),
+      FileSize = iff(_CatoFileSize matches regex @'^[0-9]+$', tolong(_CatoFileSize), long(null)),
+      // No documented algorithm discriminator exists: neither hash length nor md5 establishes file_hash's algorithm.
+      FileMD5 = '', FileSHA1 = '', FileSHA256 = '',
+      Url = iff((_CatoAntiMalware or _CatoSaasMalware or _CatoSystemAlert)
+          and gettype(column_ifexists('full_path_url', '')) == 'string', tostring(column_ifexists('full_path_url', '')), ''),
+      AttackRemediationSteps = iff(gettype(_CatoRemediation) == 'array', strcat_array(_CatoRemediation, '\n'),
+          iff(gettype(_CatoRemediation) == 'string', tostring(_CatoRemediation), '')),
+      AlertVerdict = case(_CatoClassification in~ ('FALSE_POSITIVE', 'False Positive'), 'False Positive',
+          _CatoClassification in~ ('TRUE_POSITIVE', 'True Positive'), 'True Positive',
+          _CatoClassification in~ ('BENIGN_POSITIVE', 'Benign Positive'), 'Benign Positive', ''),
+      DvcId = iff((_CatoAntiMalware or (_CatoXdr and EventOriginalSubType == 'XDR Endpoint') or _CatoSystemAlert)
+          and gettype(column_ifexists('device_id', '')) == 'string', tostring(column_ifexists('device_id', '')), ''),
+      DvcHostname = iff(_CatoDeviceScope and gettype(column_ifexists('device_name', '')) == 'string',
+          tostring(column_ifexists('device_name', '')), ''),
+      DvcIpAddr = iff(_CatoHostIp !contains '/' and isnotempty(parse_ipv6(_CatoHostIp)), _CatoHostIp, ''),
+      DvcMacAddr = iff(_CatoHostMac matches regex @'(?i)^([0-9a-f]{2}:){5}[0-9a-f]{2}$'
+          or _CatoHostMac matches regex @'(?i)^([0-9a-f]{2}-){5}[0-9a-f]{2}$', _CatoHostMac, ''),
+      DvcOs = iff(_CatoDeviceScope and gettype(column_ifexists('os_type', '')) == 'string',
+          tostring(column_ifexists('os_type', '')), ''),
+      DvcOsVersion = iff((_CatoAntiMalware or _CatoEndpoint or (_CatoXdr and EventOriginalSubType == 'XDR Endpoint') or _CatoSystemAlert)
+          and gettype(column_ifexists('os_version', '')) == 'string', tostring(column_ifexists('os_version', '')), ''),
+      ProcessName = iff(_CatoEndpoint and gettype(column_ifexists('src_process_path', '')) == 'string',
+          tostring(column_ifexists('src_process_path', '')), ''),
+      ProcessId = iff(_CatoProcessId matches regex @'^[0-9]+$' and isnotnull(tolong(_CatoProcessId)), _CatoProcessId, ''),
+      ProcessCommandLine = iff(_CatoEndpoint and gettype(column_ifexists('src_process_cmdline', '')) == 'string',
+          tostring(column_ifexists('src_process_cmdline', '')), '')
+  | extend AlertId = EventUid, AlertDescription = EventMessage, User = Username,
+      UserIdType = iff(isnotempty(UserId), 'Other', ''), Rule = RuleName,
+      DvcIdType = iff(isnotempty(DvcId), 'Other', ''),
+      Dvc = coalesce(DvcId, DvcHostname, DvcIpAddr, 'Cato Cloud'),
+      IpAddr = DvcIpAddr, Hostname = DvcHostname,
+      AdditionalFields = bag_merge(
+          bag_pack('CatoFileHash', iff(_CatoFileScope, column_ifexists('file_hash', ''), ''),
+              'CatoNetworkContext', bag_pack(
+                  'src_ip', iff(_CatoNetworkSrcScope, tostring(column_ifexists('src_ip', '')), ''),
+                  'dest_ip', iff(_CatoNetworkDstScope, tostring(column_ifexists('dest_ip', '')), ''),
+                  'src_port', iff(_CatoNetworkDstScope, tolong(column_ifexists('src_port', long(null))), long(null)),
+                  'dest_port', iff(_CatoNetworkDstScope, tolong(column_ifexists('dest_port', long(null))), long(null)))),
+          AdditionalFields)
+  | where isempty(tostring(ipaddr_has_any_prefix)) or tostring(ipaddr_has_any_prefix) == '[]' or has_any_ipv4_prefix(DvcIpAddr, ipaddr_has_any_prefix)
+  | where isempty(tostring(hostname_has_any)) or tostring(hostname_has_any) == '[]' or DvcHostname has_any (hostname_has_any)
+  | where isempty(tostring(username_has_any)) or tostring(username_has_any) == '[]' or Username has_any (username_has_any)
+  // These optional filter roles have no mapped normalized fields in the approved AlertEvent table.
+  | where isempty(tostring(attacktactics_has_any)) or tostring(attacktactics_has_any) == '[]'
+  | where isempty(tostring(attacktechniques_has_any)) or tostring(attacktechniques_has_any) == '[]'
+  | where isempty(tostring(eventseverity_has_any)) or tostring(eventseverity_has_any) == '[]'
+  | where isempty(tostring(threatcategory_has_any)) or tostring(threatcategory_has_any) == '[]' or ThreatCategory has_any (threatcategory_has_any)
+  | where isempty(tostring(alertverdict_has_any)) or tostring(alertverdict_has_any) == '[]' or AlertVerdict has_any (alertverdict_has_any)
+  | project-away _CatoSecurity, _CatoXdr, _CatoSystemAlert, _CatoEventId,
+      _CatoXdrKnown, _CatoXdrUser, _CatoXdrThreat, _CatoAntiMalware, _CatoSaasMalware, _CatoEndpoint,
+      _CatoFileScope, _CatoUserScope, _CatoDeviceScope, _CatoRuleScope, _CatoHostIpScope,
+      _CatoNetworkSrcScope, _CatoNetworkDstScope, _CatoIndication, _CatoFileSize, _CatoRemediation,
+      _CatoClassification, _CatoHostIp, _CatoHostMac, _CatoProcessId, _CatoIsoCountryCodes
+  | extend AdditionalFields = iff(pack, bag_merge(AdditionalFields, pack_all(true)), AdditionalFields)
+  };
+  parser(pack=pack, disabled=disabled)

@@ -1,0 +1,188 @@
+Description: "Normalizes Cato Cloud events to the ASIM WebSession schema."
+Parser:
+  Title: "Cato Cloud WebSession parser"
+  Version: "3.1.0"
+  LastUpdated: "Nov 23, 2026"
+Product:
+  Name: "Cato Cloud"
+Normalization:
+  Schema: "WebSession"
+  Version: "1.0.0"
+References:
+  -
+    Title: "ASIM Web Session Schema"
+    Link: "https://aka.ms/ASimWebSessionDoc"
+  -
+    Title: "ASIM"
+    Link: "https://aka.ms/AboutASIM"
+ParserName: "ASimWebSessionCato_CatoNetworksEvents_CL"
+EquivalentBuiltInParser: "_ASim_WebSession_Cato"
+ParserParams:
+  -
+    Name: "pack"
+    Type: "bool"
+    Default: "false"
+  -
+    Name: "disabled"
+    Type: "bool"
+    Default: "false"
+ParserQuery: |-
+  let parser=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), srcipaddr_has_any_prefix:dynamic=dynamic([]), ipaddr_has_any_prefix:dynamic=dynamic([]), url_has_any:dynamic=dynamic([]), httpuseragent_has_any:dynamic=dynamic([]), eventresultdetails_in:dynamic=dynamic([]), eventresult:string='*', eventresultdetails_has_any:dynamic=dynamic([]), disabled:bool=false, pack:bool=false){
+  CatoNetworksEvents_CL
+  | where not(disabled)
+  | where tostring(column_ifexists('event_type', '')) == 'Security'
+  | extend _CatoAppStack = parse_json(tostring(column_ifexists('app_stack', '')))
+  | where tostring(column_ifexists('event_sub_type', '')) == 'Apps Security' or (gettype(_CatoAppStack) == 'array' and set_has_element(_CatoAppStack, 'HTTP(S)'))
+  | extend _CatoMethod = toupper(tostring(column_ifexists('http_request_method', ''))), _CatoStatusText = tostring(column_ifexists('http_response_code', '')),
+      Url = tostring(column_ifexists('url', ''))
+  | extend _CatoStatus = iff(_CatoStatusText matches regex @'^[0-9]{3}$', toint(_CatoStatusText), int(null))
+  | where Url matches regex @'(?i)^https?://[^/\s?#]+(?:[/?#]|$)' or Url matches regex @'^[^/:\s?#]+\.[^/:\s?#]+(?::[0-9]+)?(?:[/?#]|$)'
+  // time is epoch milliseconds; ARM's DCR stores that same clock as TimeGenerated.
+  // Select the stored column only when the raw time column is absent, never time_str.
+  | where tostring(column_ifexists("event_sub_type", "")) != "Flow"
+  | where tostring(column_ifexists("source", "")) != "cato:hec:flows"
+      and tostring(column_ifexists("sourcetype", "")) != "cato:hec:flows"
+      and tostring(column_ifexists("Type", "")) != "cato:hec:flows"
+  | extend _CatoCommonRawCount = column_ifexists("event_count", dynamic(null)),
+      _CatoCommonClock = column_ifexists("time",
+          datetime_diff("millisecond", column_ifexists("TimeGenerated", datetime(null)), datetime(1970-01-01))),
+      _CatoCommonExtra = todynamic(column_ifexists("AdditionalFields", "{}"))
+  | extend _CatoCommonCountText = tostring(_CatoCommonRawCount),
+      _CatoCommonCount = tolong(_CatoCommonRawCount),
+      _CatoCommonSourceTime = unixtime_milliseconds_todatetime(tolong(tostring(_CatoCommonClock)))
+  | where isnull(_CatoCommonRawCount)
+      or (_CatoCommonCountText matches regex @"^[0-9]+$" and _CatoCommonCount between (1 .. 2147483647))
+  | where isnotnull(_CatoCommonSourceTime)
+  | where (isnull(starttime) or _CatoCommonSourceTime >= starttime)
+      and (isnull(endtime) or _CatoCommonSourceTime <= endtime)
+  | extend
+      TimeGenerated = _CatoCommonSourceTime,
+      EventStartTime = _CatoCommonSourceTime,
+      EventEndTime = _CatoCommonSourceTime,
+      EventCount = toint(coalesce(_CatoCommonCount, long(1))),
+      EventVendor = "Cato Networks",
+      EventProduct = "Cato Cloud",
+      EventSchemaVersion = "1.0.0",
+      EventOriginalType = tostring(column_ifexists("event_type", "")),
+      EventOriginalSubType = tostring(column_ifexists("event_sub_type", "")),
+      EventOriginalUid = tostring(column_ifexists("event_id", "")),
+      EventUid = tostring(column_ifexists("_ItemId", "")),
+      AdditionalFields = iff(gettype(_CatoCommonExtra) == "dictionary", _CatoCommonExtra, dynamic({})),
+      Dvc = "Cato Cloud",
+      DvcScopeId = tostring(column_ifexists("account_id", "")),
+      DvcScope = tostring(column_ifexists("account_name", ""))
+  | extend _CatoCommonAuthenticated = EventOriginalType == "Connectivity" and EventOriginalSubType == "Authenticated",
+      _CatoCommonPopScope = EventOriginalType == "Security" and EventOriginalSubType in (
+          "Internet Firewall", "WAN Firewall", "LAN Firewall", "IPS", "Suspicious Activity",
+          "Dynamic Prevention", "DNS Protection", "Agentic Threat Prevention", "Private Access Policy",
+          "RPF", "Anti Malware", "Apps Security", "Misclassification", "NG Anti Malware", "SDP Activity", "TLS")
+  | extend EventMessage = iff(_CatoCommonAuthenticated
+          or (EventOriginalType == "Security" and EventOriginalSubType in ("Data Security Alert", "Email Security Alert")),
+          tostring(column_ifexists("event_message", "")), ""),
+      DvcOriginalAction = iff(_CatoCommonAuthenticated
+          or (EventOriginalType == "System" and EventOriginalSubType == "Audit")
+          or (EventOriginalType == "Security" and EventOriginalSubType in (
+              "Internet Firewall", "WAN Firewall", "LAN Firewall", "IPS", "Suspicious Activity",
+              "Dynamic Prevention", "DNS Protection", "Agentic Threat Prevention", "Private Access Policy",
+              "RPF", "Anti Malware", "Apps Security", "NG Anti Malware", "SDP Activity", "TLS",
+              "SaaS Security API Anti Malware", "SaaS Security API Data Protection", "Endpoint Protection")),
+          tostring(column_ifexists("action", "")), ""),
+      AdditionalFields = bag_merge(AdditionalFields,
+          iff((_CatoCommonAuthenticated or _CatoCommonPopScope) and isnotempty(tostring(column_ifexists("pop_name", ""))),
+              bag_pack("CatoPopName", tostring(column_ifexists("pop_name", ""))), dynamic({})))
+  | project-away _CatoCommon*
+  // ISO 3166-1 alpha-2 allowlist (tzdata iso3166.tab, ISO/TC 46 N1127, 2024-02-29).
+  // Cato's GeoIP country codes are alpha-2; unknown values stay raw, not normalized.
+  | extend _CatoIsoCountryCodes = dynamic({"AD":1,"AE":1,"AF":1,"AG":1,"AI":1,"AL":1,"AM":1,"AO":1,"AQ":1,"AR":1,"AS":1,"AT":1,"AU":1,"AW":1,"AX":1,"AZ":1,"BA":1,"BB":1,"BD":1,"BE":1,"BF":1,"BG":1,"BH":1,"BI":1,"BJ":1,"BL":1,"BM":1,"BN":1,"BO":1,"BQ":1,"BR":1,"BS":1,"BT":1,"BV":1,"BW":1,"BY":1,"BZ":1,"CA":1,"CC":1,"CD":1,"CF":1,"CG":1,"CH":1,"CI":1,"CK":1,"CL":1,"CM":1,"CN":1,"CO":1,"CR":1,"CU":1,"CV":1,"CW":1,"CX":1,"CY":1,"CZ":1,"DE":1,"DJ":1,"DK":1,"DM":1,"DO":1,"DZ":1,"EC":1,"EE":1,"EG":1,"EH":1,"ER":1,"ES":1,"ET":1,"FI":1,"FJ":1,"FK":1,"FM":1,"FO":1,"FR":1,"GA":1,"GB":1,"GD":1,"GE":1,"GF":1,"GG":1,"GH":1,"GI":1,"GL":1,"GM":1,"GN":1,"GP":1,"GQ":1,"GR":1,"GS":1,"GT":1,"GU":1,"GW":1,"GY":1,"HK":1,"HM":1,"HN":1,"HR":1,"HT":1,"HU":1,"ID":1,"IE":1,"IL":1,"IM":1,"IN":1,"IO":1,"IQ":1,"IR":1,"IS":1,"IT":1,"JE":1,"JM":1,"JO":1,"JP":1,"KE":1,"KG":1,"KH":1,"KI":1,"KM":1,"KN":1,"KP":1,"KR":1,"KW":1,"KY":1,"KZ":1,"LA":1,"LB":1,"LC":1,"LI":1,"LK":1,"LR":1,"LS":1,"LT":1,"LU":1,"LV":1,"LY":1,"MA":1,"MC":1,"MD":1,"ME":1,"MF":1,"MG":1,"MH":1,"MK":1,"ML":1,"MM":1,"MN":1,"MO":1,"MP":1,"MQ":1,"MR":1,"MS":1,"MT":1,"MU":1,"MV":1,"MW":1,"MX":1,"MY":1,"MZ":1,"NA":1,"NC":1,"NE":1,"NF":1,"NG":1,"NI":1,"NL":1,"NO":1,"NP":1,"NR":1,"NU":1,"NZ":1,"OM":1,"PA":1,"PE":1,"PF":1,"PG":1,"PH":1,"PK":1,"PL":1,"PM":1,"PN":1,"PR":1,"PS":1,"PT":1,"PW":1,"PY":1,"QA":1,"RE":1,"RO":1,"RS":1,"RU":1,"RW":1,"SA":1,"SB":1,"SC":1,"SD":1,"SE":1,"SG":1,"SH":1,"SI":1,"SJ":1,"SK":1,"SL":1,"SM":1,"SN":1,"SO":1,"SR":1,"SS":1,"ST":1,"SV":1,"SX":1,"SY":1,"SZ":1,"TC":1,"TD":1,"TF":1,"TG":1,"TH":1,"TJ":1,"TK":1,"TL":1,"TM":1,"TN":1,"TO":1,"TR":1,"TT":1,"TV":1,"TW":1,"TZ":1,"UA":1,"UG":1,"UM":1,"US":1,"UY":1,"UZ":1,"VA":1,"VC":1,"VE":1,"VG":1,"VI":1,"VN":1,"VU":1,"WF":1,"WS":1,"YE":1,"YT":1,"ZA":1,"ZM":1,"ZW":1})
+  | extend _CatoSrcCountry = toupper(trim(@'\s+', tostring(column_ifexists('src_country_code', '')))),
+      _CatoDstCountry = toupper(trim(@'\s+', tostring(column_ifexists('dest_country_code', ''))))
+  | extend EventSchema = 'WebSession', EventType = 'HTTPsession', _CatoSubtype = tostring(column_ifexists('event_sub_type', ''))
+  | extend _CatoNetworkScope = _CatoSubtype in ('Agentic Threat Prevention', 'Anti Malware', 'Apps Security', 'Dynamic Prevention', 'IPS', 'Internet Firewall', 'Misclassification', 'NG Anti Malware', 'Private Access Policy', 'RPF', 'SDP Activity', 'Suspicious Activity', 'TLS', 'WAN Firewall'),
+      _CatoFirewall = _CatoSubtype in ('Internet Firewall', 'WAN Firewall', 'LAN Firewall'),
+      _CatoRoutedFirewall = _CatoSubtype in ('Internet Firewall', 'WAN Firewall'),
+      _CatoHttpStatusScope = _CatoSubtype in ('Agentic Threat Prevention', 'Anti Malware', 'Apps Security', 'Dynamic Prevention', 'IPS', 'Internet Firewall', 'NG Anti Malware', 'SDP Activity', 'Suspicious Activity', 'TLS', 'WAN Firewall'),
+      _CatoSrcIp = tostring(column_ifexists('src_ip', '')), _CatoDstIp = tostring(column_ifexists('dest_ip', '')),
+      _CatoSrcNatIp = tostring(column_ifexists('translated_client_ip', '')), _CatoDstNatIp = tostring(column_ifexists('translated_server_ip', '')),
+      _CatoSrcPort = toint(column_ifexists('src_port', '')), _CatoDstPort = toint(column_ifexists('dest_port', '')),
+      _CatoUser = tostring(column_ifexists('user_name', '')), _CatoProtocol = toupper(tostring(column_ifexists('ip_protocol', ''))),
+      _CatoSrcHost = tostring(column_ifexists('configured_host_name', '')), _CatoDirection = toupper(tostring(column_ifexists('traffic_direction', ''))),
+      _CatoXff = tostring(column_ifexists('xff', '')),
+      _CatoRequestBytes = tolong(column_ifexists('request_size', '')), _CatoResponseBytes = tolong(column_ifexists('response_size', '')), _CatoTotalBytes = tolong(column_ifexists('transaction_size', '')),
+      _CatoAction = tolower(tostring(column_ifexists('action', ''))),
+      _CatoSrcVlan = tostring(column_ifexists('client_vlan', '')), _CatoDstVlan = tostring(column_ifexists('server_vlan', '')),
+      _CatoMac = tostring(column_ifexists('host_mac', '')), _CatoDeviceType = tostring(column_ifexists('device_type', '')),
+      _CatoAppType = tostring(column_ifexists('application_type', '')),
+      _CatoFileSize = tostring(column_ifexists('file_size', '')),
+      _CatoDstHost = tostring(column_ifexists('dest_domain', '')), _CatoDstZone = tostring(column_ifexists('dest_site_name', ''))
+  // IANA snapshot 2026-10-29: https://www.iana.org/assignments/protocol-numbers/protocol-numbers-1.csv
+  | extend _CatoProtocolCodeNames = dynamic({"0":"HOPOPT","1":"ICMP","2":"IGMP","3":"GGP","4":"IPv4","5":"ST","6":"TCP","7":"CBT","8":"EGP","9":"IGP","10":"BBN-RCC-MON","11":"NVP-II","12":"PUP","13":"ARGUS (deprecated)","14":"EMCON","15":"XNET","16":"CHAOS","17":"UDP","18":"MUX","19":"DCN-MEAS","20":"HMP","21":"PRM","22":"XNS-IDP","23":"TRUNK-1","24":"TRUNK-2","25":"LEAF-1","26":"LEAF-2","27":"RDP","28":"IRTP","29":"ISO-TP4","30":"NETBLT","31":"MFE-NSP","32":"MERIT-INP","33":"DCCP","34":"3PC","35":"IDPR","36":"XTP","37":"DDP","38":"IDPR-CMTP","39":"TP++","40":"IL","41":"IPv6","42":"SDRP","43":"IPv6-Route","44":"IPv6-Frag","45":"IDRP","46":"RSVP","47":"GRE","48":"DSR","49":"BNA","50":"ESP","51":"AH","52":"I-NLSP","53":"SWIPE (deprecated)","54":"NARP","55":"Min-IPv4","56":"TLSP","57":"SKIP","58":"IPv6-ICMP","59":"IPv6-NoNxt","60":"IPv6-Opts","62":"CFTP","64":"SAT-EXPAK","65":"KRYPTOLAN","66":"RVD","67":"IPPC","69":"SAT-MON","70":"VISA","71":"IPCV","72":"CPNX","73":"CPHB","74":"WSN","75":"PVP","76":"BR-SAT-MON","77":"SUN-ND","78":"WB-MON","79":"WB-EXPAK","80":"ISO-IP","81":"VMTP","82":"SECURE-VMTP","83":"VINES","84":"IPTM","85":"NSFNET-IGP","86":"DGP","87":"TCF","88":"EIGRP","89":"OSPFIGP","90":"Sprite-RPC","91":"LARP","92":"MTP","93":"AX.25","94":"IPIP","95":"MICP (deprecated)","96":"SCC-SP","97":"ETHERIP","98":"ENCAP","100":"GMTP","101":"IFMP","102":"PNNI","103":"PIM","104":"ARIS","105":"SCPS","106":"QNX","107":"A/N","108":"IPComp","109":"SNP","110":"Compaq-Peer","111":"IPX-in-IP","112":"VRRP","113":"PGM","115":"L2TP","116":"DDX","117":"IATP","118":"STP","119":"SRP","120":"UTI","121":"SMP","122":"SM (deprecated)","123":"PTP","124":"ISIS over IPv4","125":"FIRE","126":"CRTP","127":"CRUDP","128":"SSCOPMCE","129":"IPLT","130":"SPS","131":"PIPE","132":"SCTP","133":"FC","134":"RSVP-E2E-IGNORE","135":"Mobility Header","136":"UDPLite","137":"MPLS-in-IP","138":"manet","139":"HIP","140":"Shim6","141":"WESP","142":"ROHC","143":"Ethernet","144":"AGGFRAG","145":"NSH","146":"Homa","147":"BIT-EMU"}),
+      _CatoProtocolNameNames = dynamic({"HOPOPT":"HOPOPT","ICMP":"ICMP","IGMP":"IGMP","GGP":"GGP","IPV4":"IPv4","ST":"ST","TCP":"TCP","CBT":"CBT","EGP":"EGP","IGP":"IGP","BBN-RCC-MON":"BBN-RCC-MON","NVP-II":"NVP-II","PUP":"PUP","ARGUS (DEPRECATED)":"ARGUS (deprecated)","EMCON":"EMCON","XNET":"XNET","CHAOS":"CHAOS","UDP":"UDP","MUX":"MUX","DCN-MEAS":"DCN-MEAS","HMP":"HMP","PRM":"PRM","XNS-IDP":"XNS-IDP","TRUNK-1":"TRUNK-1","TRUNK-2":"TRUNK-2","LEAF-1":"LEAF-1","LEAF-2":"LEAF-2","RDP":"RDP","IRTP":"IRTP","ISO-TP4":"ISO-TP4","NETBLT":"NETBLT","MFE-NSP":"MFE-NSP","MERIT-INP":"MERIT-INP","DCCP":"DCCP","3PC":"3PC","IDPR":"IDPR","XTP":"XTP","DDP":"DDP","IDPR-CMTP":"IDPR-CMTP","TP++":"TP++","IL":"IL","IPV6":"IPv6","SDRP":"SDRP","IPV6-ROUTE":"IPv6-Route","IPV6-FRAG":"IPv6-Frag","IDRP":"IDRP","RSVP":"RSVP","GRE":"GRE","DSR":"DSR","BNA":"BNA","ESP":"ESP","AH":"AH","I-NLSP":"I-NLSP","SWIPE (DEPRECATED)":"SWIPE (deprecated)","NARP":"NARP","MIN-IPV4":"Min-IPv4","TLSP":"TLSP","SKIP":"SKIP","IPV6-ICMP":"IPv6-ICMP","IPV6-NONXT":"IPv6-NoNxt","IPV6-OPTS":"IPv6-Opts","CFTP":"CFTP","SAT-EXPAK":"SAT-EXPAK","KRYPTOLAN":"KRYPTOLAN","RVD":"RVD","IPPC":"IPPC","SAT-MON":"SAT-MON","VISA":"VISA","IPCV":"IPCV","CPNX":"CPNX","CPHB":"CPHB","WSN":"WSN","PVP":"PVP","BR-SAT-MON":"BR-SAT-MON","SUN-ND":"SUN-ND","WB-MON":"WB-MON","WB-EXPAK":"WB-EXPAK","ISO-IP":"ISO-IP","VMTP":"VMTP","SECURE-VMTP":"SECURE-VMTP","VINES":"VINES","IPTM":"IPTM","NSFNET-IGP":"NSFNET-IGP","DGP":"DGP","TCF":"TCF","EIGRP":"EIGRP","OSPFIGP":"OSPFIGP","SPRITE-RPC":"Sprite-RPC","LARP":"LARP","MTP":"MTP","AX.25":"AX.25","IPIP":"IPIP","MICP (DEPRECATED)":"MICP (deprecated)","SCC-SP":"SCC-SP","ETHERIP":"ETHERIP","ENCAP":"ENCAP","GMTP":"GMTP","IFMP":"IFMP","PNNI":"PNNI","PIM":"PIM","ARIS":"ARIS","SCPS":"SCPS","QNX":"QNX","A/N":"A/N","IPCOMP":"IPComp","SNP":"SNP","COMPAQ-PEER":"Compaq-Peer","IPX-IN-IP":"IPX-in-IP","VRRP":"VRRP","PGM":"PGM","L2TP":"L2TP","DDX":"DDX","IATP":"IATP","STP":"STP","SRP":"SRP","UTI":"UTI","SMP":"SMP","SM (DEPRECATED)":"SM (deprecated)","PTP":"PTP","ISIS OVER IPV4":"ISIS over IPv4","FIRE":"FIRE","CRTP":"CRTP","CRUDP":"CRUDP","SSCOPMCE":"SSCOPMCE","IPLT":"IPLT","SPS":"SPS","PIPE":"PIPE","SCTP":"SCTP","FC":"FC","RSVP-E2E-IGNORE":"RSVP-E2E-IGNORE","MOBILITY HEADER":"Mobility Header","UDPLITE":"UDPLite","MPLS-IN-IP":"MPLS-in-IP","MANET":"manet","HIP":"HIP","SHIM6":"Shim6","WESP":"WESP","ROHC":"ROHC","ETHERNET":"Ethernet","AGGFRAG":"AGGFRAG","NSH":"NSH","HOMA":"Homa","BIT-EMU":"BIT-EMU","ARGUS":"ARGUS (deprecated)","SWIPE":"SWIPE (deprecated)","MICP":"MICP (deprecated)","SM":"SM (deprecated)"})
+  // Cato's IpProtocols enum spells these names differently; resolve by their numeric IANA codes.
+  | extend _CatoProtocolAliases = dynamic({"IP_IN_IP":"4","IPV6_ICMP":"58","IDPR_CMTP":"38","RSVP_E2E_IGNORE":"134"})
+  // Retained shared mappings keep their dictionary subtype and source/destination roles.
+  | extend SrcIpAddr = iff(_CatoNetworkScope and isnotempty(parse_ipv6(_CatoSrcIp)) and _CatoSrcIp !contains '/', _CatoSrcIp, ''), DstIpAddr = iff(_CatoNetworkScope and isnotempty(parse_ipv6(_CatoDstIp)) and _CatoDstIp !contains '/', _CatoDstIp, ''),
+      SrcNatIpAddr = iff(_CatoRoutedFirewall and isnotempty(parse_ipv6(_CatoSrcNatIp)) and _CatoSrcNatIp !contains '/', _CatoSrcNatIp, ''),
+      DstNatIpAddr = iff(_CatoRoutedFirewall and isnotempty(parse_ipv6(_CatoDstNatIp)) and _CatoDstNatIp !contains '/', _CatoDstNatIp, ''),
+      SrcPortNumber = iff(_CatoNetworkScope and _CatoSrcPort between (0 .. 65535), _CatoSrcPort, int(null)), DstPortNumber = iff(_CatoNetworkScope and _CatoDstPort between (0 .. 65535), _CatoDstPort, int(null)),
+      SrcUsername = iff(_CatoNetworkScope, _CatoUser, ''),
+      NetworkProtocol = iff(_CatoNetworkScope,
+          coalesce(tostring(_CatoProtocolCodeNames[tostring(toint(_CatoProtocol))]),
+              tostring(_CatoProtocolCodeNames[tostring(_CatoProtocolAliases[_CatoProtocol])]),
+              tostring(_CatoProtocolNameNames[_CatoProtocol])), ''),
+      NetworkApplicationProtocol = iff(_CatoNetworkScope, case(Url startswith 'https://', 'HTTPS', Url startswith 'http://', 'HTTP', gettype(_CatoAppStack) == 'array' and set_has_element(_CatoAppStack, 'HTTP(S)'), 'HTTP(S)', ''), ''),
+      NetworkDirection = case(not(_CatoNetworkScope), '', _CatoDirection == 'INBOUND', 'Inbound', _CatoDirection == 'OUTBOUND', 'Outbound', _CatoDirection == 'WANBOUND', 'Local', _CatoDirection == 'NO_DIRECTION', 'NA', ''),
+      HttpRequestMethod = iff(_CatoMethod in ('GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'CONNECT', 'OPTIONS', 'TRACE', 'PATCH'), _CatoMethod, ''),
+      EventOriginalResultDetails = tostring(column_ifexists('http_response_code', '')),
+      EventResultDetails = iff(_CatoHttpStatusScope and _CatoStatus between (100 .. 599), tostring(_CatoStatus), ''),
+      EventResult = case(_CatoHttpStatusScope and _CatoStatus between (100 .. 399), 'Success', _CatoHttpStatusScope and _CatoStatus between (400 .. 599), 'Failure', 'NA'),
+      HttpUserAgent = tostring(column_ifexists('user_agent', '')), HttpReferrer = tostring(column_ifexists('referer_url', '')),
+      HttpRequestXff = iff(_CatoNetworkScope and isnotempty(parse_ipv6(_CatoXff)) and _CatoXff !contains '/', _CatoXff, ''),
+      SrcBytes = iff(_CatoRequestBytes >= 0, _CatoRequestBytes, long(null)), DstBytes = iff(_CatoHttpStatusScope and _CatoResponseBytes >= 0, _CatoResponseBytes, long(null)), NetworkBytes = iff(_CatoHttpStatusScope and _CatoSubtype != 'SDP Activity' and _CatoTotalBytes >= 0, _CatoTotalBytes, long(null)),
+      DstAppName = iff(_CatoNetworkScope, tostring(column_ifexists('application_name', '')), ''), DstAppId = iff(_CatoNetworkScope, tostring(column_ifexists('application_id', '')), ''),
+      NetworkRuleName = iff(_CatoSubtype in ('Agentic Threat Prevention', 'Anti Malware', 'Apps Security', 'DNS Protection', 'Dynamic Prevention', 'IPS', 'Internet Firewall', 'LAN Firewall', 'Misclassification', 'NG Anti Malware', 'Private Access Policy', 'Suspicious Activity', 'TLS', 'WAN Firewall'), tostring(column_ifexists('network_rule', '')), ''),
+      DvcOriginalAction = iff(_CatoNetworkScope and _CatoSubtype != 'Misclassification', tostring(column_ifexists('action', '')), ''),
+      DvcAction = iff(_CatoNetworkScope and _CatoSubtype != 'Misclassification', case(_CatoAction in ('allow', 'allowed') or (_CatoRoutedFirewall and _CatoAction == 'monitor'), 'Allow', _CatoAction in ('block', 'blocked', 'deny', 'denied'), 'Deny', _CatoAction == 'drop', 'Drop', _CatoAction == 'drop icmp', 'Drop ICMP', _CatoAction == 'reset', 'Reset', _CatoAction == 'reset source', 'Reset Source', _CatoAction == 'reset destination', 'Reset Destination', _CatoAction == 'encrypt', 'Encrypt', _CatoAction == 'decrypt', 'Decrypt', _CatoAction == 'vpnroute', 'VPNroute', ''), ''),
+      ThreatCategory = iff(_CatoSubtype in ('Agentic Threat Prevention', 'Dynamic Prevention', 'IPS', 'Suspicious Activity'), tostring(column_ifexists('threat_type', '')), ''),
+      NetworkSessionId = iff(_CatoNetworkScope, tostring(column_ifexists('flow_id', '')), ''),
+      SrcZone = iff(_CatoNetworkScope and tostring(column_ifexists('src_endpoint_type', '')) == 'Site', tostring(column_ifexists('src_site_name', '')), ''),
+      DstZone = iff(_CatoNetworkScope and _CatoSubtype !in ('Misclassification', 'SDP Activity') and isempty(parse_ipv6(_CatoDstZone)), _CatoDstZone, ''),
+      SrcGeoCountry = iff(_CatoNetworkScope and isnotnull(_CatoIsoCountryCodes[_CatoSrcCountry]), _CatoSrcCountry, ''),
+      DstGeoCountry = iff(_CatoNetworkScope and _CatoSubtype != 'SDP Activity' and isnotnull(_CatoIsoCountryCodes[_CatoDstCountry]), _CatoDstCountry, ''),
+      SrcMacAddr = iff(_CatoNetworkScope and (_CatoMac matches regex @'^(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$' or _CatoMac matches regex @'^(?:[0-9A-Fa-f]{2}-){5}[0-9A-Fa-f]{2}$'), tolower(replace_string(_CatoMac, '-', ':')), ''),
+      SrcDvcId = iff(_CatoNetworkScope and _CatoSubtype != 'SDP Activity', tostring(column_ifexists('device_id', '')), ''),
+      SrcDeviceType = iff(_CatoNetworkScope and _CatoSubtype != 'SDP Activity' and isnotempty(_CatoDeviceType), 'Other', ''),
+      SrcVlanId = iff(_CatoSubtype == 'IPS' and _CatoSrcVlan matches regex @'^[0-9]+$' and toint(_CatoSrcVlan) between (0 .. 4094), tostring(toint(_CatoSrcVlan)), ''),
+      DstVlanId = iff(_CatoSubtype == 'IPS' and _CatoDstVlan matches regex @'^[0-9]+$' and toint(_CatoDstVlan) between (0 .. 4094), tostring(toint(_CatoDstVlan)), ''),
+      FileName = iff(_CatoSubtype in ('Agentic Threat Prevention', 'Anti Malware', 'Apps Security', 'Dynamic Prevention', 'IPS', 'NG Anti Malware', 'Suspicious Activity'), tostring(column_ifexists('file_name', '')), ''), FileSize = iff(_CatoSubtype in ('Anti Malware', 'Apps Security', 'NG Anti Malware') and _CatoFileSize matches regex @'^[0-9]+$' and tolong(_CatoFileSize) >= 0, tolong(_CatoFileSize), long(null)),
+      UrlCategory = iff(_CatoNetworkScope, tostring(column_ifexists('categories', '')), ''),
+      DstDomain = case(not(_CatoNetworkScope), '', _CatoDstHost matches regex @'^[A-Za-z0-9-]{1,63}\\[A-Za-z0-9-]{1,63}$', tostring(split(_CatoDstHost, '\\')[0]), isempty(parse_ipv6(_CatoDstHost)), extract(@'^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.([A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)\.?$', 1, _CatoDstHost), ''),
+      FileMD5 = '', FileSHA1 = '', FileSHA256 = '', FileSHA512 = '', Hash = ''
+  | where isnotempty(HttpRequestMethod) or isnotempty(EventResultDetails)
+  | extend SrcUsernameType = iff(_CatoFirewall and isnotempty(SrcUsername), tostring(column_ifexists('src_endpoint_type', '')), ''),
+      DstAppType = case(isempty(_CatoAppType) or (isempty(DstAppName) and isempty(DstAppId)), '',
+          _CatoAppType =~ 'System', 'Other', 'SaaS application'),
+      SrcDvcIdType = iff(isnotempty(SrcDvcId), 'Other', '')
+  // file_hash has no trustworthy algorithm discriminator; retain raw context, not a guessed algorithm.
+  | extend _CatoSrcDnsName = _CatoNetworkScope and _CatoSubtype != 'SDP Activity' and isnotempty(SrcIpAddr) and isempty(parse_ipv6(_CatoSrcHost)) and _CatoSrcHost matches regex @'^[A-Za-z0-9-]{1,63}(\.[A-Za-z0-9-]{1,63})*$',
+      _CatoSrcWindowsName = _CatoNetworkScope and _CatoSubtype != 'SDP Activity' and isnotempty(SrcIpAddr) and _CatoSrcHost matches regex @'^[A-Za-z0-9-]{1,63}\\[A-Za-z0-9-]{1,63}$'
+  | extend InnerVlanId = SrcVlanId, OuterVlanId = DstVlanId,
+      SrcHostname = case(_CatoSrcWindowsName, tostring(split(_CatoSrcHost, '\\')[1]), _CatoSrcDnsName, tostring(split(_CatoSrcHost, '.')[0]), ''),
+      SrcDomain = case(not(_CatoFirewall), '', _CatoSrcWindowsName, tostring(split(_CatoSrcHost, '\\')[0]), _CatoSrcDnsName and _CatoSrcHost contains '.', extract(@'^[^.]+\.(.+)$', 1, _CatoSrcHost), ''),
+      NetworkProtocolVersion = iff((isnotempty(SrcIpAddr) and isnull(parse_ipv4(SrcIpAddr))) or (isnotempty(DstIpAddr) and isnull(parse_ipv4(DstIpAddr))), 'IPv6', 'IPv4')
+  | extend SrcDomainType = case(isempty(SrcDomain), '', _CatoSrcWindowsName, 'Windows', 'FQDN'),
+      Src = SrcIpAddr, Dst = DstIpAddr, IpAddr = SrcIpAddr, User = SrcUsername,
+      Rule = NetworkRuleName, HttpStatusCode = EventResultDetails, UserAgent = HttpUserAgent,
+      _CatoSrcMatch = has_any_ipv4_prefix(SrcIpAddr, ipaddr_has_any_prefix), _CatoDstMatch = has_any_ipv4_prefix(DstIpAddr, ipaddr_has_any_prefix)
+  | where array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)
+  | where array_length(ipaddr_has_any_prefix) == 0 or _CatoSrcMatch or _CatoDstMatch
+  | where array_length(url_has_any) == 0 or Url has_any (url_has_any)
+  | where array_length(httpuseragent_has_any) == 0 or HttpUserAgent has_any (httpuseragent_has_any)
+  | where array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in)
+  | where array_length(eventresultdetails_has_any) == 0 or EventResultDetails has_any (eventresultdetails_has_any)
+  | where isempty(eventresult) or eventresult == '*' or EventResult =~ eventresult
+  | extend ASimMatchingIpAddr = case(array_length(ipaddr_has_any_prefix) == 0, '', _CatoSrcMatch and _CatoDstMatch, 'Both', _CatoSrcMatch, 'SrcIpAddr', 'DstIpAddr')
+  | extend AdditionalFields = bag_merge(AdditionalFields, iff(_CatoSubtype in ('Anti Malware', 'Apps Security', 'NG Anti Malware'), bag_pack('CatoFileHash', tostring(column_ifexists('file_hash', ''))), dynamic({})))
+  | project-away _Cato*
+  | extend AdditionalFields = iff(pack, bag_merge(AdditionalFields, pack_all(true)), AdditionalFields)
+  };
+  parser(pack=pack, disabled=disabled)
