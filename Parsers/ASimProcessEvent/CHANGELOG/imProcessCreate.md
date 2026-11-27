@@ -1,5 +1,8 @@
 # Changelog for imProcessCreate.yaml
 
+## Version 0.1.5
+- (2026-11-27) Fixed `dvchostname_has_any` parameter forwarding in `Generic(...)` call - [PR #TBD](https://github.com/Azure/Azure-Sentinel/pull/TBD)
+
 ## Version 0.1.4
 
 - (2026-11-04) Fixed parser argument forwarding - [PR #15556](https://github.com/Azure/Azure-Sentinel/pull/15556)
