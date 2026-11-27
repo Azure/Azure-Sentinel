@@ -28,17 +28,17 @@ query: |
   ProcessCreationEvents
   | where TimeGenerated between(ago(midlookback)..starttime)
   | where FileName in~ ("powershell.exe","pwsh.exe")
-  | where ProcessCommandLine has "-encodedCommand";
+  | where ProcessCommandLine matches regex @'(?i)(^|\s)[-/\x{2013}\x{2014}](?:ec|e(?:n(?:c(?:o(?:d(?:e(?:d(?:c(?:o(?:m(?:m(?:a(?:n(?:d)?)?)?)?)?)?)?)?)?)?)?)?)?)\b';
   encodedPSScripts
   | where TimeGenerated between(starttime..endtime)
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by Computer, Account, NewProcessName, FileName, ProcessCommandLine, ParentProcessName
-  | parse kind=regex flags=i ProcessCommandLine with * "-EncodedCommand " encodedCommand
+  | extend encodedCommand = extract(@'(?i)(^|\s)[-/\x{2013}\x{2014}](?:ec|e(?:n(?:c(?:o(?:d(?:e(?:d(?:c(?:o(?:m(?:m(?:a(?:n(?:d)?)?)?)?)?)?)?)?)?)?)?)?)?)\b\s*([^\s]+)', 2, ProcessCommandLine)
   | extend decodedCommand = base64_decode_tostring(substring(encodedCommand, 0, strlen(encodedCommand) - (strlen(encodedCommand) %8)))
   | join kind=leftanti (
     encodedPSScripts
     | where TimeGenerated between(ago(lookback)..starttime)
     | summarize count() by ProcessCommandLine
-    | parse kind=regex flags=i ProcessCommandLine with * "-EncodedCommand " encodedCommand
+    | extend encodedCommand = extract(@'(?i)(^|\s)[-/\x{2013}\x{2014}](?:ec|e(?:n(?:c(?:o(?:d(?:e(?:d(?:c(?:o(?:m(?:m(?:a(?:n(?:d)?)?)?)?)?)?)?)?)?)?)?)?)?)\b\s*([^\s]+)', 2, ProcessCommandLine)
     | extend decodedCommand = base64_decode_tostring(substring(encodedCommand, 0, strlen(encodedCommand) - (strlen(encodedCommand) %8)))
   ) on encodedCommand, decodedCommand
   | extend timestamp = StartTime
@@ -61,4 +61,4 @@ entityMappings:
         columnName: HostName
       - identifier: DnsDomain
         columnName: DnsDomain
-version: 2.0.1
+version: 2.0.2
