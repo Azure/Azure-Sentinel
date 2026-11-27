@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                            |
 |-------------|--------------------------------|-------------------------------------------------------------------------------|
+| 3.2.2       | 18-11-2026                     | Added Defender **XDR Detection** migrated from **Analytic Rule**, added **XDR Workbook** migrated from **Workbook**, and updated **Data Connector** Application Insights resource with `WorkspaceResourceId` |
 | 3.1.1       | 24-08-2026                     | Adding Analytic Rule to comply with MISA requirements                         |
 | 3.1.0       | 26-05-2026                     | Updated to use LogIngestion instead of the deprecated HTTP Data Collector API |
 | 3.0.3       | 05-05-2025                     | Use Flex Consumption plan to hold Data Connector                              |
