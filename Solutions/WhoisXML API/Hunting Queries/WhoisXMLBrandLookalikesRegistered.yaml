@@ -1,0 +1,38 @@
+id: e472307f-dee6-4a17-9ffa-f2bb9613aa2b
+name: WhoisXML API - Lookalikes of your brand in the typosquatting feed
+description: |
+  This query searches for domains in the last 14 days of the WhoisXML API Bulk Registration Risk (typosquatting) feed that contain a keyword from your brand keyword watchlists, whether or not anyone resolved them.
+requiredDataConnectors:
+  - connectorId: WhoisXMLAPIFeeds
+    dataTypes:
+      - WhoisXMLTyposquatting_CL
+tactics:
+  - ResourceDevelopment
+relevantTechniques:
+  - T1583.001
+query: |
+  let feed_lookback = 14d;
+  let BrandKeywords = toscalar(
+      union
+          (_GetWatchlist('WhoisXMLBrandKeywords') | project SearchKey),
+          (_GetWatchlist('WhoisXMLBrandKeywordsCustom') | project SearchKey)
+      | extend Keyword = tolower(trim(@"\s", tostring(SearchKey)))
+      | where strlen(Keyword) >= 4 and Keyword !startswith "example"
+      | summarize make_set(Keyword, 200)
+  );
+  WhoisXMLTyposquatting_CL
+  | where TimeGenerated >= ago(feed_lookback)
+  | summarize arg_max(FeedDate, GroupNumber, GroupMemberNumber, GroupSize, DomainNameUtf) by DomainName
+  | extend Keywords = BrandKeywords
+  | mv-apply Keyword = Keywords to typeof(string) on (
+      where DomainName contains Keyword or DomainNameUtf contains Keyword
+      | take 1
+  )
+  | project FeedDate, DomainName, DomainNameUtf, MatchedKeyword = Keyword, GroupNumber, GroupMemberNumber, GroupSize
+  | order by FeedDate desc, GroupNumber asc
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DomainName
+version: 1.0.0

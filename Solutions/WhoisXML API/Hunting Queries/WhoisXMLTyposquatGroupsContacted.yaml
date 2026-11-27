@@ -1,0 +1,87 @@
+id: a12e8e34-d2a7-4003-8e01-926e3dd7bb70
+name: WhoisXML API - Bulk registration groups resolved from your estate
+description: |
+  This query searches for WhoisXML API Bulk Registration Risk groups of the last 14 days with two or more member domains resolved in your DNS logs, a sign of a campaign rather than a single lookalike.
+requiredDataConnectors:
+  - connectorId: WhoisXMLAPIFeeds
+    dataTypes:
+      - WhoisXMLTyposquatting_CL
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+tactics:
+  - ResourceDevelopment
+  - InitialAccess
+relevantTechniques:
+  - T1583.001
+  - T1566.002
+query: |
+  let lookback = 14d;
+  // A group counts when at least this many of its domains were resolved in the estate
+  let min_members_seen = 2;
+  // The look-back's lookups, read twice: once for every queried name, then again for the clients of the names that matched
+  let DnsRows = _Im_Dns(starttime=ago(lookback))
+      | where isnotempty(DnsQuery)
+      | extend Fqdn = tolower(trim_end(@"\.", DnsQuery));
+  // One row per queried name with only its time span and count: per-client detail for every name would exhaust the
+  // query's memory in estates that query millions of names over the look-back
+  let ResolvedDomains = DnsRows
+      | summarize
+          StartTime = min(TimeGenerated),
+          EndTime = max(TimeGenerated),
+          QueryCount = count()
+          by Fqdn
+      | extend Labels = split(Fqdn, ".")
+      | extend LabelCount = array_length(Labels)
+      | extend Cand2 = iff(LabelCount >= 2, strcat(tostring(Labels[LabelCount - 2]), ".", tostring(Labels[LabelCount - 1])), "")
+      | extend Cand3 = iff(LabelCount >= 3, strcat(tostring(Labels[LabelCount - 3]), ".", Cand2), "")
+      | extend Candidate = pack_array(Cand2, Cand3)
+      | mv-expand Candidate to typeof(string)
+      | where isnotempty(Candidate)
+      | project Candidate, Fqdn, StartTime, EndTime, QueryCount;
+  let Members = materialize(
+      WhoisXMLTyposquatting_CL
+      | where TimeGenerated >= ago(lookback)
+      | summarize arg_max(TimeGenerated, GroupSize) by Candidate = DomainName, FeedDate, GroupNumber
+  );
+  // Each resolved name under a member once, whatever groups the member is in (a domain can be in several)
+  let Matched = materialize(
+      Members
+      | distinct Candidate
+      | join kind=inner hint.shufflekey=Candidate ResolvedDomains on Candidate
+      | project Candidate, Fqdn, StartTime, EndTime, QueryCount
+  );
+  let MatchedNames = Matched | distinct Fqdn;
+  // Clients only for the names that matched, joined from the small side: an in() filter fails above 1,000,000
+  // values, which one domain used for DNS tunnelling can reach
+  let ClientsByName = MatchedNames
+      | join kind=rightsemi DnsRows on Fqdn
+      | extend SrcIp = column_ifexists("SrcIpAddr", "")
+      | summarize SourceIps = make_set_if(SrcIp, isnotempty(SrcIp), 10) by Fqdn
+      | project Fqdn, SourceIp = tostring(SourceIps[0]);
+  // Clients go onto each name before the names are expanded into the groups their domain is in
+  let MatchedClients = Matched | join kind=inner ClientsByName on Fqdn;
+  Members
+  | join kind=inner MatchedClients on Candidate
+  | summarize
+      MembersSeen = dcount(Candidate),
+      MembersResolved = make_set(Candidate, 20),
+      GroupSize = max(GroupSize),
+      StartTime = min(StartTime),
+      EndTime = max(EndTime),
+      Queries = sum(QueryCount),
+      SourceIps = make_set_if(SourceIp, isnotempty(SourceIp), 20)
+      by FeedDate, GroupNumber
+  | where MembersSeen >= min_members_seen
+  | extend DomainName = tostring(MembersResolved[0]), SourceIp = tostring(SourceIps[0])
+  | order by MembersSeen desc
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DomainName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+version: 1.0.0

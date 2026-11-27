@@ -1,0 +1,130 @@
+id: bd394636-d5f2-4011-9c94-e2eb9c0fb3b2
+name: WhoisXML API - Newly registered domain linked in delivered email
+description: |
+  Identifies inbound email delivered to a mailbox that links to a domain WhoisXML API lists as newly registered in the last 14 days. Links to very young domains are a strong phishing signal.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: WhoisXMLAPIFeeds
+    dataTypes:
+      - WhoisXMLNRD_CL
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - EmailUrlInfo
+      - EmailEvents
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - ResourceDevelopment
+relevantTechniques:
+  - T1566.002
+  - T1583.001
+query: |
+  // Defender XDR email tables can reach the workspace late; set from the live test's measurement
+  let ingestion_delay = 1h;
+  let rule_lookback = 1h;
+  let nrd_lookback = 14d;
+  let Allowlisted = union
+      (_GetWatchlist('WhoisXMLDomainAllowlist') | project Domain = tolower(tostring(SearchKey))),
+      (_GetWatchlist('WhoisXMLDomainAllowlistCustom') | project Domain = tolower(tostring(SearchKey)));
+  let UrlRows = materialize(
+      EmailUrlInfo
+      | where TimeGenerated >= ago(2 * ingestion_delay + rule_lookback)
+      | where isnotempty(UrlDomain)
+      | extend UrlIngest = coalesce(ingestion_time(), TimeGenerated)
+      | extend Fqdn = tolower(trim_end(@"\.", UrlDomain))
+      | extend Labels = split(Fqdn, ".")
+      | extend LabelCount = array_length(Labels)
+      | extend Cand2 = iff(LabelCount >= 2, strcat(tostring(Labels[LabelCount - 2]), ".", tostring(Labels[LabelCount - 1])), "")
+      | extend Cand3 = iff(LabelCount >= 3, strcat(tostring(Labels[LabelCount - 3]), ".", Cand2), "")
+      | project UrlTime = TimeGenerated, UrlIngest, NetworkMessageId, Url, Fqdn, Cand2, Cand3, UrlLocation
+  );
+  let Candidates = union
+      (UrlRows | where isnotempty(Cand2) | distinct Domain = Cand2),
+      (UrlRows | where isnotempty(Cand3) | distinct Domain = Cand3)
+      | distinct Domain;
+  let NewDomains = WhoisXMLNRD_CL
+      | where TimeGenerated >= ago(nrd_lookback)
+      | where Reason == "added"
+      | where DomainName in (Candidates)
+      // Allowlisted domains drop out through an anti-join from the small side: an in() filter fails above 1,000,000
+      // values, which an imported list can reach
+      | join kind=leftanti Allowlisted on $left.DomainName == $right.Domain
+      | summarize FeedDate = max(FeedDate) by DomainName;
+  // A message's URL and delivery rows reach the workspace separately, in either order, so both tables are read over
+  // the same wider span, and each joined pair is kept only by the run that follows the later of its two rows.
+  // Defender streams a further delivery row whenever a message's verdict or location changes; only the first counts
+  let Delivered = EmailEvents
+      | where TimeGenerated >= ago(2 * ingestion_delay + rule_lookback)
+      | where EmailDirection == "Inbound"
+      | where DeliveryAction == "Delivered"
+      | extend DeliveryIngest = coalesce(ingestion_time(), TimeGenerated)
+      | project NetworkMessageId, DeliveryIngest, RecipientEmailAddress, SenderFromAddress, SenderFromDomain, Subject, DeliveryLocation
+      | summarize arg_min(DeliveryIngest, *) by NetworkMessageId, RecipientEmailAddress;
+  NewDomains
+  | join kind=inner (
+      UrlRows
+      | extend Candidate = pack_array(Cand2, Cand3)
+      | mv-expand Candidate to typeof(string)
+      | where isnotempty(Candidate)
+  ) on $left.DomainName == $right.Candidate
+  | join kind=inner Delivered on NetworkMessageId
+  | where max_of(UrlIngest, DeliveryIngest) > ago(rule_lookback)
+  | summarize
+      StartTime = min(UrlTime),
+      EndTime = max(UrlTime),
+      Urls = make_set(Url, 10),
+      UrlLocations = make_set(UrlLocation, 5)
+      by NetworkMessageId, RecipientEmailAddress, SenderFromAddress, SenderFromDomain, Subject, DomainName, FeedDate
+  | extend
+      Url = tostring(Urls[0]),
+      RecipientName = tostring(split(RecipientEmailAddress, "@")[0]),
+      RecipientUpnSuffix = tostring(split(RecipientEmailAddress, "@")[1])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: RecipientEmailAddress
+      - identifier: Name
+        columnName: RecipientName
+      - identifier: UPNSuffix
+        columnName: RecipientUpnSuffix
+  - entityType: MailMessage
+    fieldMappings:
+      - identifier: NetworkMessageId
+        columnName: NetworkMessageId
+      - identifier: Recipient
+        columnName: RecipientEmailAddress
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DomainName
+customDetails:
+  NrdFeedDate: FeedDate
+  Sender: SenderFromAddress
+  Subject: Subject
+  UrlLocations: UrlLocations
+alertDetailsOverride:
+  alertDisplayNameFormat: "Email to {{RecipientEmailAddress}} links to newly registered domain {{DomainName}}"
+  alertDescriptionFormat: |
+    A delivered email from {{SenderFromAddress}} contains a link to a domain that WhoisXML API lists as newly registered.
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: Selected
+    groupByEntities:
+      - DNS
+version: 1.0.0
+kind: Scheduled

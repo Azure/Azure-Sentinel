@@ -1,0 +1,82 @@
+id: eaccce72-968c-43a8-aa51-3f2dc7dd0474
+name: WhoisXML API - DNS lookups that preceded a domain's listing as newly registered
+description: |
+  This query searches for DNS lookups in the last 3 days of domains whose WhoisXML API newly registered domain rows first reached this workspace in the last day, so lookups made before the domain was listed are not missed.
+requiredDataConnectors:
+  - connectorId: WhoisXMLAPIFeeds
+    dataTypes:
+      - WhoisXMLNRD_CL
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+tactics:
+  - CommandAndControl
+  - InitialAccess
+relevantTechniques:
+  - T1071.004
+  - T1566.002
+query: |
+  let dns_lookback = 3d;
+  // Domains whose first row reached this workspace in the last day (TimeGenerated is ingestion time)
+  let NewlyListed = WhoisXMLNRD_CL
+      | where TimeGenerated >= ago(14d)
+      | where Reason == "added"
+      | summarize ListedInWorkspace = min(TimeGenerated), FeedDate = max(FeedDate) by DomainName
+      | where ListedInWorkspace >= ago(1d);
+  // The look-back's lookups, read twice: once for every queried name, then again for the clients of the names that matched
+  let DnsRows = _Im_Dns(starttime=ago(dns_lookback))
+      | where isnotempty(DnsQuery)
+      | extend Fqdn = tolower(trim_end(@"\.", DnsQuery));
+  // One row per queried name with only its time span and count: per-client detail for every name would exhaust the
+  // query's memory in estates that query millions of names over the look-back
+  let Matched = materialize(
+      DnsRows
+      | summarize
+          StartTime = min(TimeGenerated),
+          EndTime = max(TimeGenerated),
+          QueryCount = count()
+          by Fqdn
+      | extend Labels = split(Fqdn, ".")
+      | extend LabelCount = array_length(Labels)
+      | extend Cand2 = iff(LabelCount >= 2, strcat(tostring(Labels[LabelCount - 2]), ".", tostring(Labels[LabelCount - 1])), "")
+      | extend Cand3 = iff(LabelCount >= 3, strcat(tostring(Labels[LabelCount - 3]), ".", Cand2), "")
+      | extend Candidate = pack_array(Cand2, Cand3)
+      | mv-expand Candidate to typeof(string)
+      | where isnotempty(Candidate)
+      | join kind=inner hint.shufflekey=Candidate (NewlyListed | project Candidate = DomainName, ListedInWorkspace, FeedDate) on Candidate
+      // Only lookups that began before the domain reached this workspace: the hourly rule R1 cannot see them
+      | where StartTime < ListedInWorkspace
+      | project Fqdn, Candidate, StartTime, EndTime, QueryCount, ListedInWorkspace, FeedDate
+  );
+  // Clients only for the names that matched, joined from the small side: an in() filter fails above 1,000,000
+  // values, which one domain used for DNS tunnelling can reach
+  let ClientsByDomain = Matched
+      | distinct Fqdn, Candidate
+      | join kind=inner DnsRows on Fqdn
+      | extend SrcIp = column_ifexists("SrcIpAddr", "")
+      | summarize SourceIps = make_set_if(SrcIp, isnotempty(SrcIp), 20) by Candidate;
+  // One row per domain: a domain used for DNS tunnelling can carry millions of names
+  Matched
+  | summarize
+      StartTime = min(StartTime),
+      EndTime = max(EndTime),
+      QueryCount = sum(QueryCount),
+      NameCount = count(),
+      SampleFqdns = make_set(Fqdn, 10)
+      by Candidate, FeedDate, ListedInWorkspace
+  | join kind=inner ClientsByDomain on Candidate
+  // SourceIp is one of the domain's clients, for the IP entity; SampleFqdns are names under the domain, not that client's
+  | extend SourceIp = tostring(SourceIps[0]), HoursBeforeListedInWorkspace = datetime_diff('hour', ListedInWorkspace, StartTime)
+  | project StartTime, EndTime, DomainName = Candidate, SampleFqdns, NameCount, FeedDate, ListedInWorkspace,
+      HoursBeforeListedInWorkspace, QueryCount, SourceIp, SourceIps
+  | order by StartTime asc
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DomainName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+version: 1.0.0
