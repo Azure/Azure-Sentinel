@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.2.3       | 23-11-2026                     | Fixed Microsoft Graph validation error in **XDR Detection** (`imDns_DomainEntity_DnsEvents.yaml`) by replacing incomplete DNS entity mapping with `DNSDomainName` in `customDetails`, synchronized `querySha256` in 3 **XDR Detections** (`DomainEntity_CommonSecurityLog.yaml`, `DomainEntity_PaloAlto.yaml`, `URLEntity_PaloAlto.yaml`), and added `GitHubAudit` dataType metadata to `Threat Intel Matches to GitHub Audit Logs.yaml`. |
 | 3.2.2       | 26-10-2026                     | Added 52 Defender XDR Custom Detections. Updated **Analytic Rule** (`DomainEntity_PaloAlto.yaml`) and **Workbook** (`ThreatIntelligenceNew.json`).                     |
 | 3.0.21      | 29-07-2026                     | Removed the `Premium Microsoft Defender Threat Intelligence` Data Connector from the **Threat Intelligence (NEW)** Solution.  |
 | 3.0.20      | 21-07-2026                     | Updated the URLEntity AuditLogs analytic rule to 1.2.11 and refine its URL extraction and lowercase normalization so URL IoC matches in AuditLogs are more reliable. |
