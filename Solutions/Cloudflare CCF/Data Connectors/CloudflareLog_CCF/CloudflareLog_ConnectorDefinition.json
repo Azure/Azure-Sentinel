@@ -9,7 +9,7 @@
       "id": "CloudflareDefinition",
       "title": "Cloudflare (Using Blob Container) (via Codeless Connector Framework)",
       "publisher": "Microsoft",
-      "descriptionMarkdown": "The Cloudflare data connector provides the capability to ingest Cloudflare logs into Microsoft Sentinel using the Cloudflare Logpush and Azure Blob Storage. Refer to [Cloudflare documentation](https://developers.cloudflare.com/logs/about/) for more information.\n\n<p><span style='color:red; font-weight:bold;'>NOTE</span>: The Cloudflare (Using Blob Container) (via Codeless Connector Framework) data connector available in the solution requires the Azure Blob Storage account and the Microsoft Sentinel workspace to be in the <span style='font-weight:bold;'>same Azure subscription and the same Resource Group</span>. Deploying across different subscriptions or resource groups may result in errors such as <span style='font-weight:bold;'>CreateDataFlowResources not defined</span> during connector configuration.</p>",
+      "descriptionMarkdown": "The Cloudflare data connector provides the capability to ingest Cloudflare logs into Microsoft Sentinel using Cloudflare Logpush and Azure Blob Storage. Refer to [Cloudflare documentation](https://developers.cloudflare.com/logs/about/) for more information. The storage account can be in a different subscription or resource group from the Microsoft Sentinel workspace when the deploying user has the required permissions on those resources.",
       "graphQueriesTableName": "CloudflareV2_CL",
       "graphQueries": [
         {
@@ -56,6 +56,18 @@
         ],
         "customs": [
           {
+            "name": "Subscription permissions",
+            "description": "Contributor permissions are required on the target resource group to deploy storage queues and Event Grid resources. Owner or User Access Administrator permissions are required on the storage account when creating the Event Grid sender role assignment. The Microsoft.EventGrid resource provider must be registered in the storage account subscription."
+          },
+          {
+            "name": "Microsoft Sentinel collector permissions",
+            "description": "Before connecting, grant the Microsoft Sentinel first-party enterprise application displayed below Storage Blob Data Reader and Storage Queue Data Contributor on the storage account. These permissions allow the collector to read Cloudflare blobs and process notification and dead-letter queue messages. The generated template does not create these collector role assignments."
+          },
+          {
+            "name": "Event Grid delivery identity",
+            "description": "The connector enables a system-assigned managed identity on the Event Grid system topic and uses it to deliver BlobCreated events to the notification queue. Choose Create to grant that identity Storage Queue Data Message Sender on the storage account. Choose Use existing only when the same topic identity already has that account-scoped role."
+          },
+          {
             "name": "Create a storage account and a container",
             "description": "Before setting up logpush in Cloudflare, first create a storage account and a container in Microsoft Azure. Use [this guide](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction) to know more about Container and Blob. Follow the steps in the [documentation](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-create?tabs=azure-portal) to create an Azure Storage account."
           },
@@ -78,7 +90,7 @@
               "parameters": {
                 "tenantId": "[subscription().tenantId]",
                 "name": "principalId",
-                "appId": "4f05ce56-95b6-4612-9d98-a45c8cc33f9f"
+                "appId": "7ae5462d-d9d1-42f6-93ca-198d7b0ca997"
               },
               "type": "ServicePrincipalIDTextBox_test"
             },
@@ -92,6 +104,32 @@
                 }
               },
               "type": "Textbox"
+            },
+            {
+              "type": "Radio",
+              "parameters": {
+                "title": "Event Grid Storage Queue Data Message Sender assignment",
+                "name": "eventGridRbacMode",
+                "validations": {
+                  "required": true
+                },
+                "options": [
+                  {
+                    "label": "Create the required storage-account role assignment",
+                    "value": "CreateRoleAssignment"
+                  },
+                  {
+                    "label": "Use an existing storage-account role assignment",
+                    "value": "UseExistingRoleAssignment"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "Choose **Create** for a new Event Grid topic, a newly enabled system-assigned identity, or when the topic identity does not yet have **Storage Queue Data Message Sender** on the storage account. Choose **Use existing** only when that exact topic identity already has the role. If authorization initially fails, wait up to ten minutes for RBAC propagation and retry with the same values."
+              }
             },
             {
               "parameters": {

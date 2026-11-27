@@ -1,5 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 |------------|-------------------------------|--------------------|
+| 3.1.1       | 03-11-2026                     | Fixed the generated storage connection template to retain the connector definition resource ID for managed-service-principal connections. |
+| 3.1.0       | 03-11-2026                     | Migrated the Azure Blob Storage connector to the Microsoft Sentinel first-party collector and managed-identity Event Grid queue delivery. |
 | 3.0.4      | 17-08-2026                    | Added source storage subscription and resource group details to the data connector request for authorization validation. |
 | 3.0.3      | 11-05-2026                    | Modified workbook file and fixed workbook metadata to reference Cloudflare parser and CCF connector; added deployment prerequisites note to connector description |
 | 3.0.2      | 22-04-2026                    | Fixed DCR transformKql for Type field and corrected invalid field data types |
