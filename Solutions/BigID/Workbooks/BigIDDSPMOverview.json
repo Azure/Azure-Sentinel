@@ -1,0 +1,628 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "a1b2c3d4-1111-4000-8000-000000000003",
+            "version": "KqlParameterItem/1.0",
+            "name": "Tab",
+            "label": "View",
+            "type": 1,
+            "isGlobal": true,
+            "isHiddenWhenLocked": true,
+            "value": "posture"
+          },
+          {
+            "id": "a1b2c3d4-1111-4000-8000-000000000005",
+            "version": "KqlParameterItem/1.0",
+            "name": "CurrentWorkspaceCustomerId",
+            "type": 1,
+            "isHiddenWhenLocked": true,
+            "query": "union isfuzzy=true BigIDDSPMCases_CL, Operation, Usage\n| where isnotempty(TenantId)\n| take 1\n| project TenantId",
+            "timeContext": {
+              "durationMs": 604800000
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          },
+          {
+            "id": "a1b2c3d4-1111-4000-8000-000000000004",
+            "version": "KqlParameterItem/1.0",
+            "name": "EvidencePlaybookId",
+            "label": "Evidence Playbook",
+            "type": 1,
+            "isGlobal": true,
+            "isHiddenWhenLocked": true,
+            "description": "Auto-discovered BigID-GetCaseAssetEvidence Logic App in the same resource group as the current Microsoft Sentinel workspace",
+            "query": "Resources\n| where type =~ 'microsoft.operationalinsights/workspaces'\n| where tostring(properties.customerId) =~ '{CurrentWorkspaceCustomerId}'\n| project workspaceRg = tolower(resourceGroup), workspaceSub = tolower(subscriptionId)\n| join kind=inner (\n    Resources\n    | where type =~ 'microsoft.logic/workflows'\n    | where name contains 'BigID-GetCaseAssetEvidence'\n    | extend workspaceRg = tolower(resourceGroup), workspaceSub = tolower(subscriptionId)\n) on workspaceRg, workspaceSub\n| project id\n| take 1",
+            "crossComponentResources": [
+              "value::all"
+            ],
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 11,
+      "content": {
+        "version": "LinkItem/1.0",
+        "style": "tabs",
+        "links": [
+          {
+            "id": "b1b2c3d4-2222-4000-8000-000000000001",
+            "cellValue": "Tab",
+            "linkTarget": "parameter",
+            "linkLabel": "Executive Posture",
+            "subTarget": "posture",
+            "style": "link"
+          },
+          {
+            "id": "b1b2c3d4-2222-4000-8000-000000000002",
+            "cellValue": "Tab",
+            "linkTarget": "parameter",
+            "linkLabel": "Exposure Hotspots",
+            "subTarget": "hotspots",
+            "style": "link"
+          },
+          {
+            "id": "b1b2c3d4-2222-4000-8000-000000000003",
+            "cellValue": "Tab",
+            "linkTarget": "parameter",
+            "linkLabel": "Case & Objects Triage",
+            "subTarget": "triage",
+            "style": "link"
+          }
+        ]
+      },
+      "name": "navigation-tabs"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "BigIDDSPMCases\n| where Status =~ 'open'\n| summarize\n    OpenCases = count(),\n    CriticalAndHighCases = countif(Severity in~ ('critical', 'high')),\n    TotalAffectedObjects = sum(AffectedObjectsCount),\n    ImpactedDataSources = dcount(DataSourceName)\n| project\n    pack_array(\n        pack('Metric', 'Open DSPM Cases', 'Value', OpenCases),\n        pack('Metric', 'Critical / High Cases', 'Value', CriticalAndHighCases),\n        pack('Metric', 'Total Affected Objects', 'Value', TotalAffectedObjects),\n        pack('Metric', 'Impacted Data Sources', 'Value', ImpactedDataSources)\n    )\n| mv-expand Column1\n| evaluate bag_unpack(Column1)",
+              "size": 4,
+              "title": "DSPM Posture Summary (Latest Case State)",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "Metric",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "Value",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "style": "decimal",
+                      "useGrouping": true,
+                      "maximumFractionDigits": 2,
+                      "maximumSignificantDigits": 3
+                    }
+                  }
+                },
+                "showBorder": true,
+                "size": "auto"
+              }
+            },
+            "name": "kpi-tiles"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "BigIDDSPMCases\n| where Status =~ 'open'\n| summarize Cases = count() by Severity = toupper(Severity)\n| order by Cases desc",
+              "size": 1,
+              "title": "Open Cases by Severity",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart"
+            },
+            "customWidth": "50",
+            "name": "cases-by-severity"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "BigIDDSPMCases\n| where Status =~ 'open' and isnotempty(Compliance)\n| summarize Cases = count() by Compliance\n| top 10 by Cases desc",
+              "size": 1,
+              "title": "Open Cases by Compliance Framework",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "barchart"
+            },
+            "customWidth": "50",
+            "name": "cases-by-compliance"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "BigIDDSPMCases\n| where Status =~ 'open'\n| summarize OpenCases = count(), TotalAffectedObjects = sum(AffectedObjectsCount) by PolicyName, Severity = toupper(Severity)\n| order by OpenCases desc, TotalAffectedObjects desc",
+              "size": 0,
+              "title": "Top Triggered DSPM Policies",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table"
+            },
+            "name": "top-policies-table"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "posture"
+      },
+      "name": "group-posture"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "BigIDDSPMCases\n| where Status =~ 'open'\n| summarize\n    OpenCases = count(),\n    CriticalCases = countif(Severity =~ 'critical'),\n    HighCases = countif(Severity =~ 'high'),\n    AffectedObjects = sum(AffectedObjectsCount)\n    by DataSourceName, ['Data Source Type'] = DataSourceDisplayName, Vendor, Environment, SecurityTier\n| order by CriticalCases desc, HighCases desc, AffectedObjects desc",
+              "size": 0,
+              "title": "Exposure Hotspots by Data Source",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table"
+            },
+            "name": "hotspots-by-datasource"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "BigIDDSPMCases\n| where Status =~ 'open'\n| summarize AffectedObjects = sum(AffectedObjectsCount) by ['Data Source Type'] = DataSourceDisplayName\n| order by AffectedObjects desc",
+              "size": 1,
+              "title": "Affected Objects by Data Source Type",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "piechart"
+            },
+            "customWidth": "50",
+            "name": "objects-by-dstype"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "BigIDDSPMCases\n| where Status =~ 'open'\n| mv-expand _cls = CaseClassifiers\n| extend Classifier = tostring(_cls.aggItemName), DocCount = tolong(_cls.docCount)\n| where isnotempty(Classifier)\n| summarize AffectedObjects = sum(DocCount), OpenCases = dcount(CaseId) by Classifier\n| top 15 by AffectedObjects desc",
+              "size": 1,
+              "title": "Top Triggered Sensitive Classifiers (Across Open Cases)",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "AffectedObjects",
+                    "formatter": 8,
+                    "formatOptions": {
+                      "palette": "blue"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "style": "decimal",
+                        "useGrouping": true
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "OpenCases",
+                    "formatter": 4,
+                    "formatOptions": {
+                      "palette": "grayBlue"
+                    }
+                  }
+                ],
+                "filter": true
+              }
+            },
+            "customWidth": "50",
+            "name": "top-classifiers"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "hotspots"
+      },
+      "name": "group-hotspots"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "BigIDDSPMCases\n| project\n    Link = CaseId,\n    Severity = toupper(Severity),\n    Status,\n    PolicyName,\n    DataSourceName,\n    ['Data Source Type'] = DataSourceDisplayName,\n    Compliance,\n    AffectedObjectsCount,\n    Assignee,\n    PolicyLastTriggered,\n    BigIDCaseUrl\n| order by Status asc, Severity asc, AffectedObjectsCount desc",
+              "size": 0,
+              "title": "DSPM Cases (Select a row to inspect objects below, or click the Link column to open the case in BigID)",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "exportFieldName": "Link",
+              "exportParameterName": "SelectedCaseId",
+              "exportDefaultValue": "",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Link",
+                    "formatter": 7,
+                    "formatOptions": {
+                      "linkTarget": "Url",
+                      "linkColumn": "BigIDCaseUrl"
+                    }
+                  },
+                  {
+                    "columnMatch": "BigIDCaseUrl",
+                    "formatter": 5
+                  }
+                ],
+                "filter": true
+              }
+            },
+            "name": "cases-triage-table"
+          },
+          {
+            "type": 9,
+            "content": {
+              "version": "KqlParameterItem/1.0",
+              "parameters": [
+                {
+                  "id": "c1b2c3d4-3333-4000-8000-000000000001",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "ObjectsMode",
+                  "label": "Objects View",
+                  "type": 1,
+                  "isGlobal": true,
+                  "isHiddenWhenLocked": true,
+                  "value": "preview"
+                },
+                {
+                  "id": "c1b2c3d4-3333-4000-8000-000000000002",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "SelectedDataSourceName",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "BigIDDSPMCases\n| where CaseId == '{SelectedCaseId}'\n| project DataSourceName\n| take 1",
+                  "timeContext": {
+                    "durationMs": 604800000
+                  },
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "c1b2c3d4-3333-4000-8000-000000000003",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "SelectedPolicyName",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "BigIDDSPMCases\n| where CaseId == '{SelectedCaseId}'\n| project PolicyName\n| take 1",
+                  "timeContext": {
+                    "durationMs": 604800000
+                  },
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                },
+                {
+                  "id": "c1b2c3d4-3333-4000-8000-000000000004",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "SelectedBigIDFqdn",
+                  "type": 1,
+                  "isHiddenWhenLocked": true,
+                  "query": "BigIDDSPMCases\n| where CaseId == '{SelectedCaseId}'\n| project BigIDFqdn\n| take 1",
+                  "timeContext": {
+                    "durationMs": 604800000
+                  },
+                  "queryType": 0,
+                  "resourceType": "microsoft.operationalinsights/workspaces"
+                }
+              ],
+              "style": "pills",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            "name": "triage-selected-context"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "tabs",
+              "links": [
+                {
+                  "id": "d1b2c3d4-4444-4000-8000-000000000001",
+                  "cellValue": "ObjectsMode",
+                  "linkTarget": "parameter",
+                  "linkLabel": "Preview Objects (5 Cached in Log Analytics)",
+                  "subTarget": "preview",
+                  "style": "link"
+                },
+                {
+                  "id": "d1b2c3d4-4444-4000-8000-000000000003",
+                  "cellValue": "ObjectsMode",
+                  "linkTarget": "parameter",
+                  "linkLabel": "Sensitive Classifiers (Full Case)",
+                  "subTarget": "classifiers",
+                  "style": "link"
+                },
+                {
+                  "id": "d1b2c3d4-4444-4000-8000-000000000002",
+                  "cellValue": "ObjectsMode",
+                  "linkTarget": "parameter",
+                  "linkLabel": "Pull up to 1,000 Objects from BigID (Playbook)",
+                  "subTarget": "full",
+                  "style": "link"
+                }
+              ]
+            },
+            "name": "objects-mode-toggle"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "BigIDDSPMCases\n| where ('{SelectedCaseId}' == '' or CaseId == '{SelectedCaseId}')\n| mv-expand _item = SampleEvidence\n| where isnotempty(_item.fullyQualifiedName)\n| project\n    CaseId,\n    PolicyName,\n    DataSourceName,\n    ObjectName = tostring(_item.objectName),\n    FullyQualifiedName = tostring(_item.fullyQualifiedName),\n    ContainerName = tostring(_item.containerName),\n    ObjectType = tostring(_item.objectType),\n    TotalPiiCount = toint(_item.total_pii_count),\n    ObjectSizeInBytes = tolong(_item.sizeInBytes),\n    Classifications = tostring(_item.attribute),\n    ObjectOwner = tostring(_item.owner),\n    SharedWith = tostring(_item.sharedWith),\n    LastScanned = todatetime(_item.last_scanned)\n| order by TotalPiiCount desc, ObjectSizeInBytes desc",
+              "size": 0,
+              "title": "Preview Catalog Objects (Up to 5 Sample Objects per Case; switch to 'Pull up to 1,000 Objects from BigID' above for full evidence)",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "filter": true
+              }
+            },
+            "conditionalVisibility": {
+              "parameterName": "ObjectsMode",
+              "comparison": "isEqualTo",
+              "value": "preview"
+            },
+            "name": "expanded-objects-table"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "BigIDDSPMCases\n| where ('{SelectedCaseId}' == '' or CaseId == '{SelectedCaseId}')\n| mv-expand _cls = CaseClassifiers\n| extend\n    Classifier = tostring(_cls.aggItemName),\n    AffectedObjects = tolong(_cls.docCount),\n    Findings = tolong(_cls.findings),\n    Categories = tostring(_cls.categories)\n| where isnotempty(Classifier)\n| project\n    CaseId,\n    PolicyName,\n    DataSourceName,\n    Classifier,\n    AffectedObjects,\n    Findings,\n    Categories\n| order by AffectedObjects desc, Findings desc",
+              "size": 0,
+              "title": "Top Sensitive Classifiers - Full Case Breakdown (Select a case row above to filter to a specific case)",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "noDataMessage": "No sensitive classifiers found for the selected case.",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "AffectedObjects",
+                    "formatter": 8,
+                    "formatOptions": {
+                      "palette": "blue"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "style": "decimal",
+                        "useGrouping": true
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "Findings",
+                    "formatter": 4,
+                    "formatOptions": {
+                      "palette": "grayBlue"
+                    }
+                  }
+                ],
+                "filter": true
+              }
+            },
+            "conditionalVisibility": {
+              "parameterName": "ObjectsMode",
+              "comparison": "isEqualTo",
+              "value": "classifiers"
+            },
+            "name": "case-classifiers-table"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "**Note:** **Select a case row in the DSPM Cases table above** to pull up to 1,000 affected catalog objects on demand from BigID via the `BigID-GetCaseAssetEvidence` Playbook."
+            },
+            "conditionalVisibilities": [
+              {
+                "parameterName": "ObjectsMode",
+                "comparison": "isEqualTo",
+                "value": "full"
+              },
+              {
+                "parameterName": "SelectedCaseId",
+                "comparison": "isEqualTo",
+                "value": ""
+              }
+            ],
+            "name": "select-case-prompt"
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "**Playbook not detected yet:** Deploy the `BigID-GetCaseAssetEvidence` Playbook from **Microsoft Sentinel -> Automation -> Playbook templates**, wait ~1 minute for Azure Resource Graph to index it, and click **Refresh** at the top of this workbook.",
+              "style": "warning"
+            },
+            "conditionalVisibilities": [
+              {
+                "parameterName": "ObjectsMode",
+                "comparison": "isEqualTo",
+                "value": "full"
+              },
+              {
+                "parameterName": "SelectedCaseId",
+                "comparison": "isNotEqualTo",
+                "value": ""
+              },
+              {
+                "parameterName": "EvidencePlaybookId",
+                "comparison": "isEqualTo",
+                "value": ""
+              }
+            ],
+            "name": "playbook-not-found-prompt"
+          },
+          {
+            "type": 11,
+            "content": {
+              "version": "LinkItem/1.0",
+              "style": "toolbar",
+              "links": [
+                {
+                  "id": "e1b2c3d4-5555-4000-8000-000000000001",
+                  "linkTarget": "ArmAction",
+                  "linkLabel": "Fetch up to 1,000 Objects from BigID ({SelectedCaseId})",
+                  "style": "primary",
+                  "linkIsContextBlade": true,
+                  "armActionContext": {
+                    "path": "{EvidencePlaybookId}/triggers/manual/run?api-version=2016-06-01",
+                    "body": "{\n  \"caseId\": \"{SelectedCaseId}\",\n  \"dataSourceName\": \"{SelectedDataSourceName}\",\n  \"policyName\": \"{SelectedPolicyName}\",\n  \"bigidFqdn\": \"{SelectedBigIDFqdn}\"\n}",
+                    "httpMethod": "POST",
+                    "title": "Fetch Full Catalog Objects from BigID",
+                    "description": "Triggers the BigID-GetCaseAssetEvidence Playbook to pull up to 1,000 affected catalog objects for case **{SelectedCaseId}** (`{SelectedPolicyName}` on `{SelectedDataSourceName}`) and ingest them into `BigIDDSPMEvidence_CL`. After running, wait ~1-2 minutes and click the refresh icon on the table below.",
+                    "runLabel": "Fetch Objects from BigID"
+                  }
+                }
+              ]
+            },
+            "conditionalVisibilities": [
+              {
+                "parameterName": "ObjectsMode",
+                "comparison": "isEqualTo",
+                "value": "full"
+              },
+              {
+                "parameterName": "SelectedCaseId",
+                "comparison": "isNotEqualTo",
+                "value": ""
+              },
+              {
+                "parameterName": "EvidencePlaybookId",
+                "comparison": "isNotEqualTo",
+                "value": ""
+              }
+            ],
+            "name": "playbook-arm-action-button"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "union isfuzzy=true BigIDDSPMEvidence_CL\n| where column_ifexists('CaseId', '') == '{SelectedCaseId}'\n| summarize arg_max(TimeGenerated, ObjectName, ContainerName, ObjectType, TotalPiiCount, ObjectSizeInBytes, Classifications, ObjectOwner, SharedWith, LastScanned) by FullyQualifiedName\n| project\n    ObjectName,\n    FullyQualifiedName,\n    ContainerName,\n    ObjectType,\n    TotalPiiCount,\n    ObjectSizeInBytes,\n    Classifications = tostring(Classifications),\n    ObjectOwner = tostring(ObjectOwner),\n    SharedWith = tostring(SharedWith),\n    LastScanned,\n    FetchedAt = TimeGenerated\n| order by TotalPiiCount desc, ObjectSizeInBytes desc",
+              "size": 0,
+              "title": "Full Catalog Objects from BigID Playbook - Case {SelectedCaseId} ({SelectedPolicyName} on {SelectedDataSourceName}, up to 1,000 objects)",
+              "timeContext": {
+                "durationMs": 604800000
+              },
+              "showRefreshButton": true,
+              "showExportToExcel": true,
+              "noDataMessage": "No full evidence objects fetched yet for this case. Click 'Fetch up to 1,000 Objects from BigID' above, wait ~1-2 minutes for Log Analytics ingestion, and click Refresh.",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "rowLimit": 1000,
+                "filter": true
+              }
+            },
+            "conditionalVisibilities": [
+              {
+                "parameterName": "ObjectsMode",
+                "comparison": "isEqualTo",
+                "value": "full"
+              },
+              {
+                "parameterName": "SelectedCaseId",
+                "comparison": "isNotEqualTo",
+                "value": ""
+              }
+            ],
+            "name": "playbook-full-objects-table"
+          }
+        ]
+      },
+      "conditionalVisibility": {
+        "parameterName": "Tab",
+        "comparison": "isEqualTo",
+        "value": "triage"
+      },
+      "name": "group-triage"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "sentinel-BigIDDSPMOverview",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
