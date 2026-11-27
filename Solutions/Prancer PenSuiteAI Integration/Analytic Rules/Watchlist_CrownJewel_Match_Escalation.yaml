@@ -1,0 +1,105 @@
+id: 86ef6d34-720e-429f-9fe5-ff7bef9dd251
+name: Finding touches a watchlist-declared crown-jewel asset
+description: |
+  'Escalates ANY finding - not just SwarmHack findings - whose ResourceID or ResourceUrl matches an asset a
+  customer has declared in the "Prancer Crown Jewel Assets" watchlist (see Watchlists/PrancerCrownJewelAssets.json),
+  to at least that asset''s declared CriticalityTier. This is the customer-declared counterpart to
+  CrownJewel_Severity_Escalation.yaml (which only fires on SwarmHack''s own in-the-moment discoveries): it
+  makes crown-jewel-aware prioritization useful for every ScanType/DeviceProduct - SAST/SCA/DAST/CSPM/IaC
+  findings included - even for customers who have never run a SwarmHack engagement, directly addressing the
+  ADR''s stated goal of making crown-jewel content valuable independent of SwarmHack engagement history.
+  Only fires when the watchlist-declared tier is strictly higher than the finding''s nominal Severity.'
+severity: High
+requiredDataConnectors:
+- connectorId: PrancerLogData
+  dataTypes:
+    - PrancerFindings_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+status: Available
+tactics:
+  - Impact
+relevantTechniques:
+  - T1486
+query: |
+  // Cheap filters (isnotempty ResourceID/ResourceUrl) run before the watchlist join. The watchlist is small
+  // (customer-declared, not per-finding), so joining it in is cheap regardless of which side is "left".
+  // _GetWatchlist() flattens the watchlist's CSV columns into named top-level columns matching the CSV
+  // header (ResourceId, AssetName, CriticalityTier, AssetCategory, Owner, Notes) once watchlist items have
+  // propagated - live-confirmed against a real deployed watchlist (2026-08-12), 4 real findings correctly
+  // matched. Caution for future maintainers: querying _GetWatchlist() against a watchlist with zero
+  // propagated items returns a different, generic placeholder schema (_DTItemId/LastUpdatedTimeUTC/
+  // SearchKey/WatchlistItem-as-dynamic) that can look like the "real" schema but isn't - always verify
+  // against a watchlist with at least one real item present, not an empty one.
+  let CrownJewelWatchlist = (_GetWatchlist('PrancerCrownJewelAssets')
+      | project
+          WatchlistResourceId = ResourceId,
+          AssetName,
+          CriticalityTier,
+          AssetCategory,
+          Owner);
+  let SeverityRankFn = (sev: string) {
+      case(
+          sev == 'Critical', 1,
+          sev == 'High', 2,
+          sev == 'Medium', 3,
+          sev == 'Low', 4,
+          sev == 'Info' or sev == 'Informational', 5,
+          99
+      )
+  };
+  PrancerFindings
+  | where isnotempty(ResourceID) or isnotempty(ResourceUrl)
+  | extend MatchKey = iff(isnotempty(ResourceID), ResourceID, ResourceUrl)
+  | join kind=inner (CrownJewelWatchlist) on $left.MatchKey == $right.WatchlistResourceId
+  | extend
+      NominalSeverityRank = SeverityRankFn(Severity),
+      DeclaredSeverityRank = SeverityRankFn(CriticalityTier)
+  | where DeclaredSeverityRank < NominalSeverityRank
+  | extend
+      EscalatedSeverity = CriticalityTier,
+      EscalationReason = strcat(
+          'Nominal severity ', Severity, ' escalated to ', CriticalityTier, ': resource matches watchlist-declared crown jewel "',
+          AssetName, '" (', AssetCategory, ', owner: ', Owner, ')')
+  // MatchKey is whichever of ResourceID/ResourceUrl the watchlist match came from - split it back
+  // into type-specific columns so entity mapping doesn't tag a URL as an AzureResource ResourceId.
+  | extend
+      MatchedResourceId = iff(isnotempty(ResourceID), MatchKey, ''),
+      MatchedUrl = iff(isnotempty(ResourceID), '', MatchKey)
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: MatchedResourceId
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: MatchedUrl
+customDetails:
+  UniqueFindingId: FindingId
+  OriginalSeverity: Severity
+  DeviceProduct: DeviceProduct
+  ScanType: ScanType
+  WatchlistAssetName: AssetName
+  WatchlistOwner: Owner
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: Selected
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - UniqueFindingId
+alertDetailsOverride:
+  alertDisplayNameFormat: "Crown-jewel watchlist match: {{Title}}"
+  alertDescriptionFormat: "{{EscalationReason}}"
+  alertSeverityColumnName: EscalatedSeverity
+version: 1.0.0
+kind: Scheduled

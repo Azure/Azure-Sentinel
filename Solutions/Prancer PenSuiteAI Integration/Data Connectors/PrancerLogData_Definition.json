@@ -1,0 +1,155 @@
+{
+  "name": "PrancerLogData",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "PrancerLogData",
+      "title": "Prancer Data Connector",
+      "publisher": "Prancer",
+      "descriptionMarkdown": "The Prancer Data Connector provides the capability to ingest [Prancer CSPM](https://docs.prancer.io/web/CSPM/) and [PAC](https://docs.prancer.io/web/PAC/introduction/) findings into Microsoft Sentinel using Microsoft Sentinel's Codeless Connector Platform (CCP). This solution deploys the Data Collection Endpoint (DCE), Data Collection Rule (DCR), and the `PrancerFindings_CL` custom table. Prancer's backend then pushes findings directly into your workspace using the [Azure Monitor Logs Ingestion API](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview) against the deployed DCR. Refer to the [Prancer Documentation](https://docs.prancer.io/web) for more information.",
+      "graphQueriesTableName": "PrancerFindings_CL",
+      "graphQueries": [
+        {
+          "metricName": "Total data received",
+          "legend": "Prancer",
+          "baseQuery": "PrancerFindings_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "High severity findings",
+          "query": "PrancerFindings_CL\n| where Severity == 'High'"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "PrancerFindings_CL",
+          "lastDataReceivedQuery": "PrancerFindings_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        },
+        {
+          "type": "IsConnectedQuery",
+          "value": [
+            "PrancerFindings_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+          ]
+        }
+      ],
+      "availability": {
+        "status": 1,
+        "isPreview": true
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "read and write permissions on the workspace are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "read": true,
+              "write": true,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Monitoring Metrics Publisher",
+            "description": "Prancer's ingestion identity (the Microsoft Entra ID application registration created for your tenant during onboarding) must be assigned the **Monitoring Metrics Publisher** role, scoped to the Data Collection Rule (DCR) deployed by this solution. This grants least-privilege permission to push findings via the Logs Ingestion API and nothing more."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Create ARM resources and provide the required permissions",
+          "description": "This connector lets Prancer PenSuiteAI push scan findings directly to Microsoft Sentinel via the Azure Monitor Logs Ingestion API.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### Automated configuration and secure ingestion with an Entra application\nClicking **Deploy** creates the `PrancerFindings_CL` Log Analytics table and a Data Collection Rule (DCR), then creates an Entra application, links the DCR to it and assigns the **Monitoring Metrics Publisher** role scoped to that DCR. This is the least-privilege role required to push findings, and it lets Prancer send data securely using an Entra token.\n\n#### One connector per workspace\n\nThe DCR and the `PrancerFindings_CL` table are named from this workspace, so deploying the connector again in the same Log Analytics workspace reuses them rather than creating a second set.\n\nFindings from more than one Prancer tenant can be sent to the same connector; they share the table and are distinguished by `CustomerId` and `CompanyName`. To keep tenants in separate tables, with their own retention or access control, use a separate Log Analytics workspace for each."
+              }
+            },
+            {
+              "type": "DeployPushConnectorButton",
+              "parameters": {
+                "label": "Deploy Prancer PenSuiteAI connector resources",
+                "applicationDisplayName": "Prancer PenSuiteAI Findings Push Connector Application"
+              }
+            }
+          ]
+        },
+        {
+          "title": "2. Configure the Sentinel target in Prancer PenSuiteAI",
+          "description": "In the Prancer portal, open the Microsoft Sentinel integration for your tenant and enter the values below. Prancer then pushes scan findings into `PrancerFindings_CL` via the Logs Ingestion API. See the [Prancer Documentation Site](https://docs.prancer.io/web/) for full setup instructions.",
+          "instructions": [
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Tenant ID (Directory ID)",
+                "fillWith": [
+                  "TenantId"
+                ]
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Entra app registration Application ID",
+                "fillWith": [
+                  "ApplicationId"
+                ],
+                "placeholder": "Deploy push connector to get the App Registration Application ID"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Entra app registration secret",
+                "fillWith": [
+                  "ApplicationSecret"
+                ],
+                "placeholder": "Deploy push connector to get the App Registration Secret"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Data Collection Endpoint URI",
+                "fillWith": [
+                  "DataCollectionEndpoint"
+                ],
+                "placeholder": "Deploy push connector to get the Data Collection Endpoint Uri"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Data Collection Rule immutable ID",
+                "fillWith": [
+                  "DataCollectionRuleId"
+                ],
+                "placeholder": "Deploy push connector to get the Data Collection Rule Immutable ID"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Findings stream name",
+                "value": "Custom-PrancerFindings"
+              }
+            }
+          ]
+        }
+      ],
+      "isConnectivityCriteriasMatchSome": false
+    }
+  }
+}
