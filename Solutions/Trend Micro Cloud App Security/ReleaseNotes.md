@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 |---|---|---|
+| 3.2.3 | 09-11-2026 | Marked the legacy Azure Function **Data Connector** as deprecated in its title and description. The CCF connector, existing ingestion configuration, and Defender XDR content are preserved. |
 | 3.2.2 | 20-04-2026 | Migrated Analytic Rules and Workbooks to Microsoft Defender XDR detections and workbooks. |
 | 3.1.2 | 23-07-2026 | Updated CCF Data Connector graph queries pattern. |
 | 3.1.1 | 17-07-2026 | Promoted CCF connector (`TrendMicroCASConnector`) to General Availability: set `isPreview` to `false` and removed Preview disclaimer from solution description. |
