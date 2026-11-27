@@ -38,6 +38,16 @@ def has_analytic_rules(solution: str | Path) -> bool:
     )
 
 
+def has_detection_content(solution: str | Path) -> bool:
+    root = Path(solution).expanduser().resolve()
+    from solution_manager.migration.converter import xdr_detection_files
+
+    xdr_dir = root / "XDR Detections"
+    return has_analytic_rules(root) or (
+        xdr_dir.is_dir() and bool(xdr_detection_files(xdr_dir))
+    )
+
+
 def _digest(value: Any) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -303,7 +313,7 @@ def validate_evidence(solution: str | Path, state: dict[str, Any]) -> dict[str, 
 
 
 def inspect_content(solution: str | Path) -> dict[str, Any]:
-    from solution_manager.migration.converter import inspect_solution
+    from solution_manager.migration.converter import inspect_solution, xdr_detection_files
     from solution_manager.migration.workbooks import inventory_workbooks
 
     root = Path(solution).expanduser().resolve()
@@ -313,7 +323,7 @@ def inspect_content(solution: str | Path) -> dict[str, Any]:
     verify_inventory(root, state)
     result = inspect_solution(root) if has_analytic_rules(root) else {
         "solution": str(root), "analyticRuleCount": 0, "analyticRules": [],
-        "existingXdrDetectionCount": 0,
+        "existingXdrDetectionCount": len(xdr_detection_files(root / "XDR Detections")),
     }
     inventory = inventory_workbooks(root)
     return {**result, "workbookCount": len(inventory),
@@ -396,14 +406,14 @@ def convert_content(solution: str | Path, *, overwrite: bool = False,
 
 
 def validate_content(solution: str | Path) -> dict[str, Any]:
-    from solution_manager.migration.converter import validate_solution
+    from solution_manager.migration.converter import validate_solution, xdr_detection_files
 
     root = Path(solution).expanduser().resolve()
     state = current_state(root)
     if not state or not enabled(state):
         return validate_solution(root)
     verify_inventory(root, state)
-    if has_analytic_rules(root):
+    if has_analytic_rules(root) or bool(xdr_detection_files(root / "XDR Detections")):
         result = validate_solution(root)
     else:
         from solution_manager.core.content_paths import scan_solution_urls
@@ -483,7 +493,7 @@ def create_candidate(solution: str | Path, *, validation_receipt: str | Path | N
         if context["workflowProfile"] == "authoring":
             workflow._validate_offline_authoring_gates(root, state_path, state)
         else:
-            if has_analytic_rules(root):
+            if has_detection_content(root):
                 from solution_manager.qualification.runtime import current_runtime_evidence
                 if current_runtime_evidence(root).get("passed") is not True:
                     raise ValueError("combined Qualification still requires all current detection runtime gates")
@@ -649,7 +659,7 @@ def expected_content_counts(
         if data_xdr_det is not None:
             custom_detections_count = len(data_xdr_det)
         elif (root / "XDR Detections").is_dir():
-            custom_detections_count = len(xdr_detection_files(root))
+            custom_detections_count = len(xdr_detection_files(root / "XDR Detections"))
         else:
             custom_detections_count = 0
 

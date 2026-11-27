@@ -1106,6 +1106,99 @@ class SolutionReportTests(unittest.TestCase):
             parser.feed(Path(report["htmlReport"]).read_text(encoding="utf-8"))
             self.assertEqual([loaded_source["query"]], parser.queries)
 
+    def test_native_only_and_mixed_solutions_report_and_validate_without_source_or_conversion(self) -> None:
+        from sentinel_xdr_migration.workflow import (
+            build_consolidated_review_packet,
+            complete_workflow_stage,
+            initialize_workflow,
+            start_workflow_stage,
+        )
+
+        native_doc = {
+            "schemaVersion": "1.0.0",
+            "version": "3.1.0",
+            "kind": "CustomDetection",
+            "resourceType": "Microsoft.Security/detectionRules",
+            "apiVersion": "2026-06-01-preview",
+            "contentProvenance": {
+                "requiredWorkloads": [
+                    {"workload": "mde", "dataTypes": ["DeviceEvents"]},
+                ],
+                "requiredDataConnectors": [],
+            },
+            "properties": {
+                "id": "xdr-55555555-5555-5555-5555-555555555555",
+                "displayName": "Standalone Native Detection",
+                "status": "disabled",
+                "queryCondition": {
+                    "queryText": "DeviceEvents | where Timestamp > ago(5m) | project Timestamp, DeviceId",
+                },
+                "schedule": {"frequency": "PT1H"},
+                "detectionAction": {
+                    "alertTemplate": {
+                        "title": "Standalone Native Detection",
+                        "description": "Directly authored XDR detection.",
+                        "severity": "medium",
+                        "entityMappings": {
+                            "hosts": [{"id": "host1", "deviceIdColumn": "DeviceId"}],
+                        },
+                        "tactics": [{"tactic": "Execution", "techniques": [{"technique": "T1059"}]}],
+                    },
+                },
+            },
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            native_root = Path(folder) / "NativeSolution"
+            xdr_dir = native_root / "XDR Detections"
+            xdr_dir.mkdir(parents=True)
+            (xdr_dir / "Native.yaml").write_text(
+                yaml.safe_dump(native_doc, sort_keys=False), encoding="utf-8"
+            )
+            initialize_workflow(native_root, workflow_profile="authoring")
+            start_workflow_stage(native_root, "discovery")
+            complete_workflow_stage(native_root, "discovery", status="passed")
+            start_workflow_stage(native_root, "conversion")
+            complete_workflow_stage(native_root, "conversion", status="passed")
+            start_workflow_stage(native_root, "validation")
+            complete_workflow_stage(
+                native_root,
+                "validation",
+                status="passed",
+                artifacts={"runtimeStatus": "not-run", "validationMode": "offline-authoring"},
+            )
+
+            packet = build_consolidated_review_packet(native_root)
+            self.assertEqual(0, packet["summary"]["totalItems"])
+            self.assertTrue(packet["summary"]["readyForValidation"])
+            self.assertEqual(
+                "xdr-55555555-5555-5555-5555-555555555555",
+                packet["detections"][0]["ruleId"],
+            )
+
+            report = build_solution_report(native_root)
+            self.assertEqual(1, report["summary"]["rules"])
+            self.assertEqual(1, report["summary"]["native"])
+            self.assertEqual(1, report["summary"]["deploymentReady"])
+            self.assertEqual(0, report["summary"]["errors"])
+            rule = report["rules"][0]
+            self.assertIsNone(rule["sourceFile"])
+            self.assertEqual("native", rule["customDetection"]["conversionStatus"])
+            self.assertEqual("passed", rule["customDetection"]["structuralStatus"])
+
+            mixed_root = Path(folder) / "MixedSolution"
+            analytic_dir = mixed_root / "Analytic Rules"
+            analytic_dir.mkdir(parents=True)
+            (analytic_dir / "Rule.yaml").write_text(RULE, encoding="utf-8")
+            convert_solution(mixed_root)
+            (mixed_root / "XDR Detections" / "Native.yaml").write_text(
+                yaml.safe_dump(native_doc, sort_keys=False), encoding="utf-8"
+            )
+            mixed_report = build_solution_report(mixed_root)
+            self.assertEqual(2, mixed_report["summary"]["rules"])
+            self.assertEqual(1, mixed_report["summary"]["converted"])
+            self.assertEqual(1, mixed_report["summary"]["native"])
+            self.assertEqual(2, mixed_report["summary"]["deploymentReady"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -515,3 +515,18 @@ def migrate_reports(solution: str | Path, *, apply: bool = False) -> dict[str, A
     return {"mode": "applied" if apply else "dry-run", "files": sorted(prepared),
             "runId": destination.name, "destination": destination.relative_to(root).as_posix(),
             "originalsPreserved": True}
+
+
+def load_config(output_dir: Path, explicit: str | Path | None = None) -> dict[str, Any]:
+    path = (
+        Path(explicit).expanduser().resolve()
+        if explicit
+        else existing_artifact_path(output_dir.parent, "migration-config.yaml")
+    )
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as handle:
+        value = yaml.safe_load(handle) or {}
+    if not isinstance(value, dict):
+        raise ValueError(f"migration config must contain a YAML object: {path}")
+    return value

@@ -765,6 +765,121 @@ class AdvancedHuntingProviderBoundsTests(unittest.TestCase):
                 call.args[0] for call in run_query.call_args_list
             ])
 
+    def test_native_detection_without_source_conversion_or_query_sha256_plans_and_validates(self):
+        from solution_manager.core.content_paths import runtime_validation_plan
+        from solution_manager.qualification.runtime import (
+            compute_query_sha256,
+            current_runtime_evidence,
+            current_runtime_query_hash,
+            resolve_detection_query_sha256,
+        )
+
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp:
+            solution = Path(temp) / "NativeSolution"
+            output = solution / "XDR Detections"
+            output.mkdir(parents=True)
+            native_query = "DeviceProcessEvents | where FileName =~ 'cmd.exe'"
+            expected_sha = compute_query_sha256(native_query)
+            native_doc = {
+                "schemaVersion": "1.0.0",
+                "version": "1.0.0",
+                "kind": "CustomDetection",
+                "resourceType": "Microsoft.Security/detectionRules",
+                "contentProvenance": {
+                    "requiredWorkloads": [{"workload": "mde", "dataTypes": ["DeviceProcessEvents"]}],
+                    "requiredDataConnectors": [],
+                },
+                "properties": {
+                    "id": "native-cmd-detection",
+                    "displayName": "Native Cmd Detection",
+                    "status": "disabled",
+                    "queryCondition": {"queryText": native_query},
+                    "schedule": {"frequency": "PT1H"},
+                    "detectionAction": {
+                        "alertTemplate": {
+                            "title": "Native Cmd Detection",
+                            "description": "Detects cmd.exe",
+                            "severity": "medium",
+                            "entityMappings": {
+                                "hosts": [{"id": "host1", "deviceIdColumn": "DeviceId"}]
+                            },
+                        }
+                    },
+                },
+            }
+            blocked_migrated_doc = {
+                "kind": "CustomDetection",
+                "contentProvenance": {
+                    "source": {
+                        "platform": "Microsoft Sentinel",
+                        "kind": "AnalyticsRule",
+                        "id": "11111111-2222-3333-4444-555555555555",
+                        "path": "Analytic Rules/Blocked.yaml",
+                    },
+                    "conversion": {
+                        "tool": "sentinel-to-xdr-migration",
+                        "status": "blocked",
+                        "reviewRequired": True,
+                    },
+                },
+                "properties": {
+                    "id": "xdr-11111111-2222-3333-4444-555555555555",
+                    "queryCondition": {"queryText": "SecurityEvent | take 1"},
+                },
+            }
+            native_path = output / "NativeRule.yaml"
+            native_path.write_text(yaml.safe_dump(native_doc), encoding="utf-8")
+            (output / "BlockedRule.yaml").write_text(yaml.safe_dump(blocked_migrated_doc), encoding="utf-8")
+
+            self.assertEqual(expected_sha, resolve_detection_query_sha256(native_doc))
+            self.assertEqual(
+                expected_sha,
+                current_runtime_query_hash(solution, native_path, provider="graph"),
+            )
+            self.assertEqual(
+                expected_sha,
+                current_runtime_query_hash(solution, native_path, provider="triage-mcp"),
+            )
+
+            plan = runtime_validation_plan(solution)
+            self.assertEqual(1, len(plan["rules"]))
+            rule_entry = plan["rules"][0]
+            self.assertEqual("NativeRule.yaml", rule_entry["detection"])
+            self.assertIsNone(rule_entry["sourceRule"])
+            self.assertTrue(rule_entry["targetOnly"])
+            self.assertEqual(expected_sha, rule_entry["sentinelQuerySha256"])
+            self.assertEqual(expected_sha, rule_entry["advancedHuntingQuerySha256"])
+            self.assertEqual(expected_sha, rule_entry["querySha256"])
+
+            with (
+                mock.patch(
+                    "sentinel_xdr_migration.runtime._advanced_hunting_token",
+                    return_value="test-token",
+                ),
+                mock.patch(
+                    "sentinel_xdr_migration.runtime.run_advanced_hunting_query",
+                    return_value={
+                        "ok": True,
+                        "statusCode": 200,
+                        "rowCount": 1,
+                        "schema": [{"name": "DeviceId", "type": "String"}],
+                        "sampleRows": [{"DeviceId": "dev-1"}],
+                        "sampleRowsTruncated": False,
+                        "error": None,
+                        "errorDetails": None,
+                    },
+                ),
+            ):
+                ah_report = validate_advanced_hunting(solution)
+
+            self.assertEqual(1, ah_report["valid"])
+            self.assertEqual(expected_sha, ah_report["results"][0]["querySha256"])
+
+            evidence = current_runtime_evidence(solution)
+            self.assertTrue(evidence["passed"], evidence)
+            self.assertTrue(evidence["targetOnly"])
+            self.assertEqual("not-applicable", evidence["sourceStatus"])
+
 
 class _SyntheticDetection:
     def __init__(self, name, query):

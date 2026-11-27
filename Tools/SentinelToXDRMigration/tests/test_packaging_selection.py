@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -439,6 +440,7 @@ class PackagingSelectionTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory(dir=Path.cwd())
         self.addCleanup(self.temp.cleanup)
+        self.addCleanup(cli_module.configure_logging, None)
         self.solution = Path(self.temp.name) / "Selection"
         self.solution.mkdir()
         for folder, name in (
@@ -1736,6 +1738,136 @@ class PackagingSelectionTests(unittest.TestCase):
                 "--run-id", self.run_id,
             ])
         self.assertEqual(1, blocked)
+
+    def test_native_xdr_detections_are_selected_without_analytic_rules_or_conversion_block(self) -> None:
+        shutil.rmtree(self.solution / "Analytic Rules")
+        (self.solution / "XDR Detections" / "Keep.yaml").unlink(missing_ok=True)
+        (self.solution / "XDR Detections" / "Drop.yaml").unlink(missing_ok=True)
+        native_id = "xdr-22222222-2222-2222-2222-222222222222"
+        native_path = self.solution / "XDR Detections" / "Native.yaml"
+        native_doc = {
+            "schemaVersion": "1.0.0",
+            "version": "3.1.0",
+            "kind": "CustomDetection",
+            "resourceType": "Microsoft.Security/detectionRules",
+            "apiVersion": "2026-06-01-preview",
+            "contentProvenance": {
+                "requiredWorkloads": [
+                    {"workload": "mde", "dataTypes": ["DeviceEvents"]},
+                ],
+                "requiredDataConnectors": [],
+            },
+            "properties": {
+                "id": native_id,
+                "displayName": "Native Detection",
+                "status": "disabled",
+                "queryCondition": {
+                    "queryText": "DeviceEvents | where Timestamp > ago(5m) | project Timestamp, DeviceId",
+                },
+                "schedule": {"frequency": "PT1H"},
+                "detectionAction": {
+                    "alertTemplate": {
+                        "title": "Native Detection",
+                        "description": "Directly authored XDR detection.",
+                        "severity": "medium",
+                        "entityMappings": {
+                            "hosts": [{"id": "host1", "deviceIdColumn": "DeviceId"}],
+                        },
+                        "tactics": [{"tactic": "Execution", "techniques": [{"technique": "T1059"}]}],
+                    },
+                },
+            },
+        }
+        native_path.write_text(yaml.safe_dump(native_doc, sort_keys=False), encoding="utf-8")
+        self.original_data.pop("Analytic Rules", None)
+        self.original_data["XDR Detections"] = ["XDR Detections/Native.yaml"]
+        self.data_path.write_text(json.dumps(self.original_data), encoding="utf-8")
+
+        plan = create_package_selection_plan(self.solution, self.run_id)
+        self.assertEqual("ready", plan["status"])
+        self.assertEqual("complete", plan["summary"]["outcome"])
+        self.assertIsNone(plan["summary"]["eligibilityBlockReason"])
+        self.assertEqual(["XDR Detections/Native.yaml"], plan["selection"]["xdrDetections"])
+        self.assertEqual([], plan["selection"]["analyticRules"])
+        self.assertTrue(plan["xdrDetections"][0]["included"])
+        self.assertEqual("not-applicable", plan["xdrDetections"][0]["checks"]["conversion"]["status"])
+        self.assertEqual("not-applicable", plan["xdrDetections"][0]["checks"]["sourceProvenance"]["status"])
+
+        applied = apply_package_selection(
+            self.solution,
+            self.run_id,
+            expected_plan_sha256=plan["planSha256"],
+        )
+        self.assertEqual("applied", applied["status"])
+        verified = verify_applied_package_selection(self.solution, self.run_id)
+        self.assertEqual(plan["planSha256"], verified["plan"]["planSha256"])
+
+    def test_migrated_detection_with_non_converted_status_is_still_excluded(self) -> None:
+        shutil.rmtree(self.solution / "Analytic Rules")
+        (self.solution / "XDR Detections" / "Keep.yaml").unlink(missing_ok=True)
+        (self.solution / "XDR Detections" / "Drop.yaml").unlink(missing_ok=True)
+        native_path = self.solution / "XDR Detections" / "Native.yaml"
+        blocked_path = self.solution / "XDR Detections" / "BlockedMigrated.yaml"
+        base_doc = {
+            "schemaVersion": "1.0.0",
+            "version": "3.1.0",
+            "kind": "CustomDetection",
+            "resourceType": "Microsoft.Security/detectionRules",
+            "apiVersion": "2026-06-01-preview",
+            "contentProvenance": {
+                "requiredWorkloads": [{"workload": "mde", "dataTypes": ["DeviceEvents"]}],
+                "requiredDataConnectors": [],
+            },
+            "properties": {
+                "id": "xdr-33333333-3333-3333-3333-333333333333",
+                "displayName": "Native Valid",
+                "status": "disabled",
+                "queryCondition": {
+                    "queryText": "DeviceEvents | project Timestamp, DeviceId",
+                },
+                "schedule": {"frequency": "PT1H"},
+                "detectionAction": {
+                    "alertTemplate": {
+                        "title": "Native Valid",
+                        "description": "Directly authored XDR detection.",
+                        "severity": "medium",
+                        "entityMappings": {
+                            "hosts": [{"id": "host1", "deviceIdColumn": "DeviceId"}],
+                        },
+                    },
+                },
+            },
+        }
+        native_path.write_text(yaml.safe_dump(base_doc, sort_keys=False), encoding="utf-8")
+        blocked_doc = copy.deepcopy(base_doc)
+        blocked_doc["properties"]["id"] = "xdr-44444444-4444-4444-4444-444444444444"
+        blocked_doc["contentProvenance"]["conversion"] = {
+            "tool": "sentinel-to-xdr-migration",
+            "status": "blocked",
+            "reviewRequired": True,
+        }
+        blocked_path.write_text(yaml.safe_dump(blocked_doc, sort_keys=False), encoding="utf-8")
+        self.original_data.pop("Analytic Rules", None)
+        self.original_data["XDR Detections"] = [
+            "XDR Detections/Native.yaml",
+            "XDR Detections/BlockedMigrated.yaml",
+        ]
+        self.data_path.write_text(json.dumps(self.original_data), encoding="utf-8")
+        with using_run(self.solution, self.run_id):
+            run_directory = report_directory(self.solution, create=True)
+        (run_directory / "manifest.json").write_text(
+            json.dumps({"scope": {"kind": "solution"}, "total": 0, "results": []}),
+            encoding="utf-8",
+        )
+
+        plan = _build_package_selection_plan(self.solution, self.run_id)
+        by_path = {item["path"]: item for item in plan["xdrDetections"]}
+        self.assertTrue(by_path["XDR Detections/Native.yaml"]["included"])
+        self.assertFalse(by_path["XDR Detections/BlockedMigrated.yaml"]["included"])
+        self.assertIn(
+            "conversion-not-currently-converted-or-reviewed",
+            by_path["XDR Detections/BlockedMigrated.yaml"]["reasons"],
+        )
 
 
 if __name__ == "__main__":

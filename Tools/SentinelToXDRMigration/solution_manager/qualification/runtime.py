@@ -17,13 +17,25 @@ import yaml
 
 from solution_manager.core.artifacts import (
     existing_artifact_path,
-    report_directory,
+    load_config,
     portable_artifact,
+    report_directory,
     write_json_artifact,
 )
-from solution_manager.migration.converter import custom_detail_schema_errors, load_config, xdr_detection_files
 from solution_manager.authoring.dependencies import dependency_identity, live_dependency_check
-from solution_manager.core.content_paths import content_path
+from solution_manager.core.content_paths import (
+    _extract_detection_query_text,
+    _is_explicitly_non_converted,
+    _query_sha256,
+    analytic_rule_files,
+    compute_query_sha256,
+    content_path,
+    custom_detail_schema_errors,
+    is_sentinel_derived,
+    resolve_detection_query_sha256,
+    solution_paths,
+    xdr_detection_files,
+)
 from solution_manager.qualification.graph_auth import (
     GRAPH_RESOURCE_DEFAULT_SCOPE,
     validate_delegated_graph_claims,
@@ -354,7 +366,7 @@ def _write_runtime_artifacts(
 
         detection_paths = {
             path.relative_to(root / "XDR Detections").as_posix(): path
-            for path in _detection_files(root / "XDR Detections")
+            for path in _expected_detection_files_for_provider(root, provider)
         }
         expected_query_hashes = {
             name: current_runtime_query_hash(root, path, provider=provider)
@@ -453,14 +465,78 @@ def _write_runtime_artifacts(
     return summary
 
 
-def _query_sha256(query: str) -> str:
-    return hashlib.sha256(query.encode("utf-8")).hexdigest()
+def _has_sentinel_source_rule(root: Path, document: Any) -> bool:
+    if not isinstance(document, dict):
+        return False
+    if is_sentinel_derived(document):
+        return True
+    source = ((document.get("contentProvenance") or {}).get("source") or {})
+    if isinstance(source, dict):
+        source_id = source.get("id")
+        if isinstance(source_id, str) and source_id.strip():
+            return True
+        source_ref = source.get("path")
+        if isinstance(source_ref, str) and source_ref.strip():
+            try:
+                return content_path(root, source_ref).is_file()
+            except Exception:
+                return True
+    for key in ("sourceRuleId", "sourceRulePath"):
+        val = document.get(key)
+        if isinstance(val, str) and val.strip():
+            return True
+    return False
+
+
+def _runnable_detection_files(output: Path) -> list[Path]:
+    files = _detection_files(output)
+    runnable: list[Path] = []
+    for path in files:
+        try:
+            with path.open(encoding="utf-8-sig") as handle:
+                doc = yaml.safe_load(handle) or {}
+        except Exception:
+            runnable.append(path)
+            continue
+        if not _is_explicitly_non_converted(doc):
+            runnable.append(path)
+    return runnable
+
+
+def _is_native_only_detection(root: Path, document: Any) -> bool:
+    if not isinstance(document, dict):
+        return False
+    if _has_sentinel_source_rule(root, document):
+        return False
+    return isinstance(document.get("properties"), dict) or isinstance(
+        document.get("contentProvenance"), dict
+    )
+
+
+def _expected_detection_files_for_provider(root: Path, provider: str) -> list[Path]:
+    output = root / "XDR Detections"
+    files = _runnable_detection_files(output)
+    if provider in SOURCE_PROVIDERS:
+        expected: list[Path] = []
+        for path in files:
+            try:
+                doc = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
+            except Exception:
+                doc = None
+            if not _is_native_only_detection(root, doc):
+                expected.append(path)
+        return expected
+    return files
 
 
 def _source_query(root: Path, detection: dict[str, Any]) -> str:
     source = ((detection.get("contentProvenance") or {}).get("source") or {})
-    source_reference = source.get("path")
+    source_reference = source.get("path") if isinstance(source, dict) else None
     if not isinstance(source_reference, str) or not source_reference:
+        if not is_sentinel_derived(detection):
+            target_query = _extract_detection_query_text(detection)
+            if target_query:
+                return target_query
         raise ValueError("Custom Detection provenance must identify its source Analytic Rule")
     source_path = content_path(root, source_reference)
     with source_path.open(encoding="utf-8-sig") as handle:
@@ -479,11 +555,19 @@ def current_runtime_query_hash(
     with detection_path.open(encoding="utf-8-sig") as handle:
         document = yaml.safe_load(handle) or {}
     if provider == "graph":
-        query = (((document.get("properties") or {}).get("queryCondition") or {}).get("queryText"))
-        if not isinstance(query, str):
+        query = _extract_detection_query_text(document)
+        if not isinstance(query, str) or not query.strip():
             raise ValueError("Custom Detection has no Advanced Hunting query")
-        return _query_sha256(query)
-    return _query_sha256(_source_query(root, document))
+        return compute_query_sha256(query)
+    source = ((document.get("contentProvenance") or {}).get("source") or {})
+    source_ref = source.get("path") if isinstance(source, dict) else None
+    if isinstance(source_ref, str) and source_ref.strip():
+        source_path = content_path(root, source_ref)
+        if source_path.is_file():
+            return compute_query_sha256(_source_query(root, document))
+    if not is_sentinel_derived(document):
+        return resolve_detection_query_sha256(document)
+    return compute_query_sha256(_source_query(root, document))
 
 
 def current_runtime_evidence(solution: str | Path) -> dict[str, Any]:
@@ -492,10 +576,20 @@ def current_runtime_evidence(solution: str | Path) -> dict[str, Any]:
     output = root / "XDR Detections"
     paths = {
         path.relative_to(output).as_posix(): path
-        for path in _detection_files(output)
+        for path in _runnable_detection_files(output)
     }
     if not paths:
         return {"passed": False, "issues": ["no converted detections are available for runtime validation"]}
+
+    sentinel_paths: dict[str, Path] = {}
+    for name, path in paths.items():
+        try:
+            doc = yaml.safe_load(path.read_text(encoding="utf-8-sig")) or {}
+        except Exception:
+            doc = {}
+        if _has_sentinel_source_rule(root, doc):
+            sentinel_paths[name] = path
+    target_only_solution = len(sentinel_paths) == 0
 
     issues: list[str] = []
     current_query_failures: list[str] = []
@@ -730,13 +824,14 @@ def current_runtime_evidence(solution: str | Path) -> dict[str, Any]:
                 or proof.get("kqlError") is not False
             ):
                 continue
+        expected_source_paths = sentinel_paths if (sentinel_paths and not target_only_solution) else paths
         current_failures_before = len(current_query_failures)
         passed, family_issues, waiver_only, current_whitelist = inspect_family(
             provider,
             report_path,
             {
                 name: current_runtime_query_hash(root, path, provider=provider)
-                for name, path in paths.items()
+                for name, path in expected_source_paths.items()
             },
         )
         if passed and not unverified_fallback_claim:
@@ -772,7 +867,10 @@ def current_runtime_evidence(solution: str | Path) -> dict[str, Any]:
             or not isinstance(report.get("providerFailure"), dict)
         ):
             break
-    if not source_passed and not source_waiver_only_blocker:
+    if target_only_solution and not available_source_reports:
+        source_passed = True
+        source_provider_used = None
+    elif not source_passed and not source_waiver_only_blocker:
         issues.extend(source_issues or ["no Sentinel runtime validation report is available"])
 
     graph_passed, graph_issues, _, _ = inspect_family(
@@ -793,8 +891,11 @@ def current_runtime_evidence(solution: str | Path) -> dict[str, Any]:
     return {
         "passed": source_passed and graph_passed,
         "sentinelProvider": source_provider_used,
+        "targetOnly": target_only_solution,
         "sourceStatus": (
-            "source-waived"
+            "not-applicable"
+            if target_only_solution and not available_source_reports
+            else "source-waived"
             if source_waived
             else "passed"
             if source_passed
@@ -1280,10 +1381,10 @@ def validate_advanced_hunting(
         tenant_id=locked_target["tenantId"] if locked_target is not None else tenant_id,
     )
     detections: list[tuple[Path, dict[str, Any], str]] = []
-    for path in _detection_files(output):
+    for path in _runnable_detection_files(output):
         with path.open(encoding="utf-8-sig") as handle:
             document = yaml.safe_load(handle) or {}
-        query = document["properties"]["queryCondition"]["queryText"]
+        query = _extract_detection_query_text(document)
         detections.append((path, document, query))
 
     if min_request_interval_seconds is None:
@@ -1386,8 +1487,6 @@ def validate_sentinel_sdk(
     _sleep=None,
 ) -> dict[str, Any]:
     """Run the complete current Sentinel source-query family with Azure Monitor SDK."""
-    from solution_manager.core.content_paths import content_path
-    from solution_manager.migration.converter import analytic_rule_files, solution_paths, xdr_detection_files
     from solution_manager.qualification.logs_query import (
         DEFAULT_FAMILY_TIMEOUT_SECONDS,
         DEFAULT_REQUEST_TIMEOUT_SECONDS,
@@ -1427,12 +1526,14 @@ def validate_sentinel_sdk(
         source_by_path[relative] = (source_path, query, _query_sha256(query))
 
     detections: dict[str, str] = {}
-    for detection_path in xdr_detection_files(output):
+    for detection_path in _runnable_detection_files(output):
         with detection_path.open(encoding="utf-8-sig") as handle:
-            detection = yaml.safe_load(handle)
-        source_ref = ((detection or {}).get("contentProvenance") or {}).get("source") or {}
-        source_path_ref = source_ref.get("path")
-        if not isinstance(source_path_ref, str):
+            detection = yaml.safe_load(handle) or {}
+        source_ref = (detection.get("contentProvenance") or {}).get("source") or {}
+        source_path_ref = source_ref.get("path") if isinstance(source_ref, dict) else None
+        if not isinstance(source_path_ref, str) or not source_path_ref.strip():
+            if not is_sentinel_derived(detection):
+                continue
             raise ValueError(f"Custom Detection provenance is missing its source path: {detection_path}")
         source_path = content_path(root, source_path_ref)
         if not source_path.is_file():
@@ -1443,7 +1544,12 @@ def validate_sentinel_sdk(
         if relative in detections.values():
             raise ValueError(f"multiple Custom Detections refer to the same source Analytic Rule: {source_path_ref}")
         current_hash = source_by_path[relative][2]
-        if source_ref.get("querySha256") != current_hash:
+        recorded_source_sha = (
+            source_ref.get("querySha256")
+            if isinstance(source_ref, dict) and source_ref.get("querySha256")
+            else compute_query_sha256(source_by_path[relative][1])
+        )
+        if recorded_source_sha != current_hash:
             raise ValueError(f"Custom Detection provenance has a stale source-query hash: {source_path_ref}")
         detections[detection_path.relative_to(output).as_posix()] = relative
 
@@ -1585,7 +1691,10 @@ def record_runtime_validation(
     if provider_fallback and provider != provider_fallback["fallbackProvider"]:
         raise ValueError("Sentinel MCP fallback results must be recorded under the approved fallback provider")
     output = root / "XDR Detections"
-    detection_paths = {path.relative_to(output).as_posix(): path for path in _detection_files(output)}
+    detection_paths = {
+        path.relative_to(output).as_posix(): path
+        for path in _expected_detection_files_for_provider(root, provider)
+    }
     expected = set(detection_paths)
     if (results_path is None) == (results_data is None):
         raise ValueError("provide exactly one of results_path or results_data")
@@ -1663,14 +1772,22 @@ def record_runtime_validation(
                     "query family against the current source queries"
                 )
         if status == "passed" and detection in detection_paths:
-            document = yaml.safe_load(detection_paths[detection].read_text(encoding="utf-8-sig"))
-            source_path = content_path(root, document["contentProvenance"]["source"]["path"])
-            source_document = yaml.safe_load(source_path.read_text(encoding="utf-8-sig"))
+            document = yaml.safe_load(detection_paths[detection].read_text(encoding="utf-8-sig")) or {}
+            source_meta = ((document.get("contentProvenance") or {}).get("source") or {})
+            source_path_ref = source_meta.get("path") if isinstance(source_meta, dict) else None
+            if isinstance(source_path_ref, str) and source_path_ref.strip():
+                source_path = content_path(root, source_path_ref)
+                source_document = yaml.safe_load(source_path.read_text(encoding="utf-8-sig")) or {}
+                dep_source_query = source_document["query"]
+                dep_source_connectors = source_document.get("requiredDataConnectors")
+            else:
+                dep_source_query = _extract_detection_query_text(document)
+                dep_source_connectors = None
             try:
                 dependency_validation = live_dependency_check(
-                    document, source_document["query"], entry.get("dataSources"),
+                    document, dep_source_query, entry.get("dataSources"),
                     table_mappings=dependency_config.get("tableMappings"),
-                    source_connectors=source_document.get("requiredDataConnectors"),
+                    source_connectors=dep_source_connectors,
                 )
             except ValueError as exc:
                 dependency_validation = {"status": "failed", "errors": [str(exc)]}

@@ -1118,6 +1118,58 @@ class DeploymentTests(unittest.TestCase):
         result = self._deploy_with_readback(enabled)
         self.assertEqual(0, result["succeeded"])
 
+    def test_native_detection_graph_readiness_and_disabled_restoration_without_source_or_conversion(self):
+        from solution_manager.qualification.graph_readiness import (
+            compute_query_sha256,
+            graph_detection_payload_with_projection,
+            verify_graph_disabled_restoration,
+        )
+
+        native_doc = document()
+        native_doc["contentProvenance"].pop("source", None)
+        native_id = f"xdr-{RULE_ID}"
+        native_doc["contentProvenance"].pop("conversion", None)
+        native_doc["properties"]["id"] = native_id
+        query_text = native_doc["properties"]["queryCondition"]["queryText"]
+        expected_sha = compute_query_sha256(query_text)
+
+        payload, projection = graph_detection_payload_with_projection(native_doc)
+        self.assertEqual(native_id, payload["id"])
+        self.assertEqual("disabled", payload["status"])
+        self.assertEqual(expected_sha, projection["querySha256"])
+
+        restored = verify_graph_disabled_restoration(
+            native_doc,
+            {"id": native_id, "status": "disabled", "isEnabled": False},
+        )
+        self.assertEqual("passed", restored["status"])
+        self.assertTrue(restored["restoredToDisabled"])
+        self.assertEqual(expected_sha, restored["querySha256"])
+
+        not_restored = verify_graph_disabled_restoration(
+            native_doc,
+            {"id": native_id, "status": "enabled", "isEnabled": True},
+        )
+        self.assertEqual("failed", not_restored["status"])
+        self.assertFalse(not_restored["restoredToDisabled"])
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            detections = root / "XDR Detections"
+            detections.mkdir()
+            (detections / "native.yaml").write_text(
+                yaml.safe_dump(native_doc), encoding="utf-8"
+            )
+            with mock.patch(
+                "sentinel_xdr_migration.graph_readiness.require_locked_target",
+                return_value=TARGET,
+            ):
+                report = preflight_deployment(root)
+
+        self.assertEqual("ready", report["payloadReadiness"][0]["status"])
+        self.assertEqual(native_id, report["payloadReadiness"][0]["id"])
+        self.assertEqual(expected_sha, report["payloadReadiness"][0]["querySha256"])
+
 
 if __name__ == "__main__":
     unittest.main()

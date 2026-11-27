@@ -42,10 +42,12 @@ from solution_manager.authoring.authoring_contract import (
 from solution_manager.core.content_paths import content_path
 from solution_manager.migration.converter import (
     BEST_EFFORT_ENTITY_REVIEW_PREFIX,
+    PREFIXED_SOURCE_ID_PATTERN,
     SOURCE_ID_PATTERN,
     analytic_rule_files,
     inspect_solution,
     convert_solution,
+    is_sentinel_derived,
     validate_document,
     validate_solution,
     solution_paths,
@@ -306,10 +308,98 @@ def _stage_result(name: str, *, required: bool = True) -> dict[str, Any]:
     }
 
 
+def _is_native_detection(document: Any) -> bool:
+    if not isinstance(document, dict):
+        return False
+    if is_sentinel_derived(document):
+        return False
+    provenance = document.get("contentProvenance")
+    if isinstance(provenance, dict):
+        if provenance.get("source") is not None or provenance.get("conversion") is not None:
+            return False
+    return True
+
+
+def _has_analytic_rules(solution: str | Path) -> bool:
+    root = Path(solution).expanduser().resolve()
+    has_rule_folder = any(
+        (root / name).is_dir()
+        for name in ("Analytic Rules", "Analytics Rules")
+    )
+    return bool(analytic_rule_files(root)) if has_rule_folder else False
+
+
+def _native_detection_paths(solution: str | Path) -> dict[str, Path]:
+    root = Path(solution).expanduser().resolve()
+    output = root / "XDR Detections"
+    if not output.is_dir():
+        return {}
+    result: dict[str, Path] = {}
+    for path in xdr_detection_files(output):
+        try:
+            doc = yaml.safe_load(path.read_text(encoding="utf-8-sig")) or {}
+        except (OSError, UnicodeError, yaml.YAMLError):
+            continue
+        if _is_native_detection(doc):
+            result[path.relative_to(root).as_posix()] = path
+    return result
+
+
 def _source_inventory(solution: str | Path) -> list[dict[str, Any]]:
-    root, analytic, _ = solution_paths(solution)
-    files = analytic_rule_files(root)
+    root, analytic, output = solution_paths(solution, require_analytic_rules=False)
+    has_rule_folder = any(
+        (root / name).is_dir()
+        for name in ("Analytic Rules", "Analytics Rules")
+    )
+    files = analytic_rule_files(root) if has_rule_folder else []
+    if not files and output.is_dir():
+        native_files = [
+            path for path in xdr_detection_files(output)
+            if _is_native_detection(yaml.safe_load(path.read_text(encoding="utf-8-sig")) or {})
+        ]
+        if native_files:
+            inventory: list[dict[str, Any]] = []
+            seen_ids: set[str] = set()
+            for path in native_files:
+                source_bytes = path.read_bytes()
+                try:
+                    document = yaml.safe_load(source_bytes.decode("utf-8-sig")) or {}
+                except (UnicodeError, yaml.YAMLError) as exc:
+                    raise ValueError(f"cannot freeze native detection {path}: {exc}") from exc
+                if not isinstance(document, dict):
+                    raise ValueError(f"native detection must be a YAML object: {path}")
+                props = document.get("properties") if isinstance(document.get("properties"), dict) else {}
+                rule_id = props.get("id") or document.get("id")
+                query = (
+                    ((props.get("queryCondition") or {}).get("queryText") if isinstance(props.get("queryCondition"), dict) else None)
+                    or document.get("query")
+                )
+                if not isinstance(rule_id, str) or not (
+                    re.fullmatch(SOURCE_ID_PATTERN, rule_id)
+                    or re.fullmatch(PREFIXED_SOURCE_ID_PATTERN, rule_id)
+                ):
+                    raise ValueError(f"native detection has no valid full GUID identity: {path}")
+                canonical_id = rule_id[4:] if rule_id.lower().startswith("xdr-") else rule_id
+                if canonical_id.casefold() in seen_ids:
+                    raise ValueError(f"duplicate native detection identity in complete inventory: {rule_id}")
+                if not isinstance(query, str) or not query.strip():
+                    raise ValueError(f"native detection has no non-empty query: {path}")
+                seen_ids.add(canonical_id.casefold())
+                inventory.append({
+                    "ruleId": rule_id,
+                    "path": path.relative_to(root).as_posix(),
+                    "sha256": hashlib.sha256(source_bytes).hexdigest(),
+                    "querySha256": hashlib.sha256(query.encode("utf-8")).hexdigest(),
+                    "evidenceReferences": [{
+                        "path": path.relative_to(root).as_posix(),
+                        "sha256": hashlib.sha256(source_bytes).hexdigest(),
+                        "kind": "source",
+                    }],
+                })
+            inventory.sort(key=lambda item: item["path"])
+            return inventory
     if not files:
+        root, analytic, _ = solution_paths(solution)
         raise ValueError("YOLO requires a non-empty complete Analytic Rules inventory")
     inventory: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
@@ -380,6 +470,28 @@ def _budget_source_inventory(
             and re.fullmatch(SOURCE_ID_PATTERN, document["id"])
         ):
             rule_ids.add(document["id"])
+    output = root / "XDR Detections"
+    if not files and output.is_dir():
+        for path in xdr_detection_files(output):
+            content = path.read_bytes()
+            try:
+                document = yaml.safe_load(content.decode("utf-8-sig")) or {}
+            except (UnicodeError, yaml.YAMLError):
+                continue
+            if not _is_native_detection(document):
+                continue
+            props = document.get("properties") if isinstance(document.get("properties"), dict) else {}
+            det_id = props.get("id") or document.get("id")
+            if not isinstance(det_id, str) or not (
+                re.fullmatch(SOURCE_ID_PATTERN, det_id)
+                or re.fullmatch(PREFIXED_SOURCE_ID_PATTERN, det_id)
+            ):
+                continue
+            rows.append({
+                "path": path.relative_to(root).as_posix(),
+                "sha256": hashlib.sha256(content).hexdigest(),
+            })
+            rule_ids.add(det_id)
     digest = hashlib.sha256(
         json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
@@ -1559,16 +1671,25 @@ def _validate_source_waiver_conversion_gates(
         path.relative_to(root).as_posix()
         for path in xdr_detection_files(output_directory)
     }
-    if current_outputs != expected_outputs:
+    native_outputs = {
+        rel_path
+        for rel_path, native_path in _native_detection_paths(root).items()
+        if rel_path not in expected_outputs
+        and not bool(
+            ((yaml.safe_load(native_path.read_text(encoding="utf-8-sig")) or {}).get("contentProvenance") or {}).get("dependencyReviewRequired")
+        )
+    }
+    if current_outputs != (expected_outputs | native_outputs):
         raise ValueError(
             "source-waived validation requires conversion targets to match the full manifest inventory"
         )
+    expected_total = total + len(native_outputs)
     structural = validate_solution(root)
     if (
         structural.get("conversionScope", {}).get("kind") != "solution"
-        or structural.get("total") != total
+        or structural.get("total") != expected_total
         or structural.get("invalid") != 0
-        or len(structural.get("results") or []) != total
+        or len(structural.get("results") or []) != expected_total
         or any(item.get("valid") is not True for item in structural.get("results") or [])
     ):
         raise ValueError(
@@ -1586,9 +1707,14 @@ def _validate_offline_authoring_gates(
     """Require fresh full-inventory local evidence before offline Authoring completion."""
     if state.get("context", {}).get("workflowProfile") != "authoring":
         raise ValueError("offline validation completion is available only for Authoring")
+    root = solution.expanduser().resolve()
+    has_analytic = _has_analytic_rules(root)
+    native_paths = _native_detection_paths(root)
+    native_only = not has_analytic and bool(native_paths)
+    required_prior_stages = ("discovery",) if native_only and state["stages"]["conversion"].get("status") in {"passed", "notRequired"} else ("discovery", "conversion")
     if any(
         state["stages"][stage].get("status") != "passed"
-        for stage in ("discovery", "conversion")
+        for stage in required_prior_stages
     ):
         raise ValueError(
             "offline Authoring validation requires passed discovery and full-solution conversion"
@@ -1604,11 +1730,44 @@ def _validate_offline_authoring_gates(
             "reports and preserve their results: " + ", ".join(present_reports)
         )
 
-    root = solution.expanduser().resolve()
     if workbook_workflow.enabled(state):
         workbook_workflow.validate_evidence(root, state)
-        if not workbook_workflow.has_analytic_rules(root):
+        if not workbook_workflow.has_analytic_rules(root) and not native_only:
             return
+    if native_only:
+        output_dir = root / "XDR Detections"
+        all_xdr_files = xdr_detection_files(output_dir) if output_dir.is_dir() else []
+        if not all_xdr_files or len(all_xdr_files) != len(native_paths):
+            raise ValueError(
+                "offline Authoring native detection inventory contains non-native or unreferenced detections"
+            )
+        for rel_path, target_path in sorted(native_paths.items()):
+            try:
+                target_document = yaml.safe_load(target_path.read_text(encoding="utf-8-sig")) or {}
+            except (OSError, UnicodeError, yaml.YAMLError) as exc:
+                raise ValueError(f"offline Authoring target YAML is invalid: {exc}") from exc
+            provenance = (
+                target_document.get("contentProvenance", {})
+                if isinstance(target_document, dict)
+                else {}
+            )
+            if isinstance(provenance, dict) and provenance.get("dependencyReviewRequired") is True:
+                raise ValueError(
+                    f"offline Authoring dependency review is unresolved for {rel_path}"
+                )
+        structural = validate_solution(root)
+        if (
+            structural.get("conversionScope", {}).get("kind") == "rule"
+            or structural.get("total") != len(native_paths)
+            or structural.get("invalid") != 0
+            or structural.get("valid") != len(native_paths)
+            or len(structural.get("results") or []) != len(native_paths)
+            or any(item.get("valid") is not True for item in structural.get("results") or [])
+        ):
+            raise ValueError(
+                "offline Authoring validation requires current full-solution structural validation to pass"
+            )
+        return
     inventory = _source_inventory(root)
     conversion_artifacts = state["stages"]["conversion"].get("artifacts") or {}
     expected_manifest_hash = conversion_artifacts.get("manifestSha256")
@@ -1630,6 +1789,14 @@ def _validate_offline_authoring_gates(
         inventory,
         manifest,
     )
+    extra_native_outputs = {
+        rel_path
+        for rel_path, native_path in native_paths.items()
+        if rel_path not in manifest_outputs
+        and not bool(
+            ((yaml.safe_load(native_path.read_text(encoding="utf-8-sig")) or {}).get("contentProvenance") or {}).get("dependencyReviewRequired")
+        )
+    }
     if state.get("authoring"):
         if record is None:
             record, _ = _current_yolo_record(root, state_path, state)
@@ -1775,7 +1942,7 @@ def _validate_offline_authoring_gates(
             path.relative_to(root).as_posix()
             for path in xdr_detection_files(output)
         }
-        if current_outputs != expected_outputs:
+        if current_outputs != (expected_outputs | extra_native_outputs):
             raise ValueError(
                 "offline Authoring converted targets do not match the complete current inventory"
             )
@@ -1784,13 +1951,14 @@ def _validate_offline_authoring_gates(
         raise ValueError(
             "offline Authoring conversion outputs do not match the bound manifest"
         )
+    expected_total = len(inventory) + len(extra_native_outputs)
     structural = validate_solution(root)
     if (
         structural.get("conversionScope", {}).get("kind") != "solution"
-        or structural.get("total") != len(inventory)
+        or structural.get("total") != expected_total
         or structural.get("invalid") != 0
-        or structural.get("valid") != len(inventory)
-        or len(structural.get("results") or []) != len(inventory)
+        or structural.get("valid") != expected_total
+        or len(structural.get("results") or []) != expected_total
         or any(item.get("valid") is not True for item in structural.get("results") or [])
     ):
         raise ValueError(
@@ -2288,7 +2456,23 @@ def run_yolo_authoring(solution: str | Path) -> dict[str, Any]:
                         "resumed": discovery["status"] == "running",
                         "workPerformed": False,
                     }
-                if inspection["analyticRuleCount"] != len(inventory):
+                frozen_from_native_xdr = (
+                    not workbook_workflow.enabled(state)
+                    and bool(inventory)
+                    and all(
+                        str(item.get("path", "")).startswith("XDR Detections/")
+                        for item in inventory
+                    )
+                )
+                expected_inventory_count = (
+                    len(_native_detection_paths(root))
+                    if frozen_from_native_xdr and inspection["analyticRuleCount"] == 0
+                    else inspection["analyticRuleCount"]
+                )
+                if (
+                    (frozen_from_native_xdr and inspection["analyticRuleCount"] > 0)
+                    or expected_inventory_count != len(inventory)
+                ):
                     _mark_yolo_conflicted(
                         state_path, state,
                         "Discovery inventory count changed after YOLO scope freeze.",
@@ -2716,7 +2900,7 @@ def initialize_workflow(
             root,
             campaign_id,
             yolo=yolo is True and not (
-                workbook_capability_version == 1 and not workbook_workflow.has_analytic_rules(root)
+                workbook_capability_version == 1 and not workbook_workflow.has_detection_content(root)
             ),
         )
         run = create_run(root)
@@ -2842,7 +3026,7 @@ def initialize_workflow(
                 "next": _next_stage_name(state),
             }
 
-    workbook_only = workbook_capability_version == 1 and not workbook_workflow.has_analytic_rules(root)
+    workbook_only = workbook_capability_version == 1 and not workbook_workflow.has_detection_content(root)
     frozen_inventory = _source_inventory(root) if yolo is True and not workbook_only else None
     if frozen_inventory is not None and not campaign_id:
         raise ValueError("new YOLO workflows require an explicit --campaign-id")
@@ -6105,7 +6289,7 @@ def _complete_workflow_stage_unlocked(
     if (
         stage == "validation" and status == "passed"
         and workbook_workflow.enabled(state)
-        and not workbook_workflow.has_analytic_rules(solution)
+        and not workbook_workflow.has_detection_content(solution)
         and state["context"]["workflowProfile"] == "qualification"
     ):
         if state["context"].get("workbookQualificationAfterArm") is True:
@@ -6192,16 +6376,33 @@ def _complete_workflow_stage_unlocked(
             }
             message = _offline_authoring_validation_message()
         else:
+            root_resolved = Path(solution).expanduser().resolve()
+            native_only = not _has_analytic_rules(root_resolved) and bool(_native_detection_paths(root_resolved))
+            if (
+                native_only
+                and not runtime_evidence.get("passed")
+                and runtime_evidence.get("graphReport")
+                and runtime_evidence.get("issues") == ["no Sentinel runtime validation report is available"]
+            ):
+                runtime_evidence = {
+                    **runtime_evidence,
+                    "passed": True,
+                    "sourceStatus": "not-applicable",
+                    "issues": [],
+                }
             if not runtime_evidence["passed"]:
                 raise ValueError(
                     "passed validation requires complete Sentinel and Advanced Hunting "
                     "runtime evidence bound to every current query: "
                     + "; ".join(runtime_evidence["issues"])
                 )
-            final_artifacts.setdefault("sentinelRuntimeProvider", runtime_evidence["sentinelProvider"])
-            final_artifacts.setdefault("sentinelRuntimeReport", runtime_evidence["sentinelReport"])
-            final_artifacts.setdefault("sentinelRuntimeJson", runtime_evidence["sentinelReport"])
-            final_artifacts.setdefault("advancedHuntingRuntimeReport", runtime_evidence["graphReport"])
+            if runtime_evidence.get("sentinelProvider"):
+                final_artifacts.setdefault("sentinelRuntimeProvider", runtime_evidence["sentinelProvider"])
+            if runtime_evidence.get("sentinelReport"):
+                final_artifacts.setdefault("sentinelRuntimeReport", runtime_evidence["sentinelReport"])
+                final_artifacts.setdefault("sentinelRuntimeJson", runtime_evidence["sentinelReport"])
+            if runtime_evidence.get("graphReport"):
+                final_artifacts.setdefault("advancedHuntingRuntimeReport", runtime_evidence["graphReport"])
     elif stage == "validation" and status in {"blocked", "failed"}:
         from solution_manager.qualification.runtime import current_runtime_evidence
 
@@ -6400,7 +6601,8 @@ def _build_next_step_recommendation(
                 continue
             source_meta = provenance.get("source") or {}
             conversion = provenance.get("conversion") or {}
-            rule_id = str(source_meta.get("id") or target_path.stem)
+            properties = doc.get("properties") if isinstance(doc.get("properties"), dict) else {}
+            rule_id = str(source_meta.get("id") or properties.get("id") or doc.get("id") or target_path.stem)
             alert_title = str(
                 (
                     (((doc.get("properties") or {}).get("detectionAction") or {}).get(
@@ -6720,7 +6922,9 @@ def build_consolidated_review_packet(
         provenance = doc.get("contentProvenance") or {}
         source_meta = provenance.get("source") or {}
         conversion = provenance.get("conversion") or {}
-        rule_id = str(source_meta.get("id") or target_path.stem)
+        properties = doc.get("properties") if isinstance(doc.get("properties"), dict) else {}
+        is_native = _is_native_detection(doc)
+        rule_id = str(source_meta.get("id") or properties.get("id") or doc.get("id") or target_path.stem)
         source_rel = str(source_meta.get("path") or "")
         if source_rel:
             converted_source_paths.add(source_rel)
@@ -7012,14 +7216,24 @@ def build_consolidated_review_packet(
         )
         dep_info = live_dep_by_detection.get(rel_from_xdr)
         if dep_info is None:
-            source_query_text = str(source_doc.get("query") or query_text)
-            dep_info = dependency_plan(
-                source_query_text,
-                target_query=query_text,
-                connectors=source_doc.get("requiredDataConnectors")
-                or doc.get("requiredDataConnectors"),
-                table_mappings=table_mappings,
-            )
+            from solution_manager.authoring.dependencies import dependency_validation_errors
+
+            if (
+                is_native
+                and not dependency_validation_errors(doc)
+                and not provenance.get("dependencyReviewRequired")
+            ):
+                dep_info = {"reviewReasons": [], "unmappedDataTypes": []}
+            else:
+                source_query_text = str(source_doc.get("query") or query_text)
+                dep_info = dependency_plan(
+                    source_query_text,
+                    target_query=query_text,
+                    connectors=source_doc.get("requiredDataConnectors")
+                    or doc.get("requiredDataConnectors")
+                    or provenance.get("requiredDataConnectors"),
+                    table_mappings=table_mappings,
+                )
         dep_reasons = list(dep_info.get("reviewReasons") or [])
         for unmapped_dt in dep_info.get("unmappedDataTypes") or []:
             msg = f"Unmapped data type requires workload mapping: {unmapped_dt}"

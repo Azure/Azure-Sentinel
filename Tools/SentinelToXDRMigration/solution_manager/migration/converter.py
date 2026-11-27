@@ -11,7 +11,13 @@ from typing import Any
 
 import yaml
 
-from solution_manager.core.artifacts import conversion_scope, existing_artifact_path, report_directory, portable_artifact, write_json_artifact
+from solution_manager.core.artifacts import (
+    conversion_scope,
+    load_config,
+    portable_artifact,
+    report_directory,
+    write_json_artifact,
+)
 from jsonschema import Draft202012Validator
 
 from solution_manager import __version__
@@ -38,8 +44,13 @@ from solution_manager.core.content_paths import (
     _load_git_head_yaml,
     _version_tuple,
     _without_version,
+    analytic_rule_files,
     content_path,
+    custom_detail_schema_errors,
+    is_sentinel_derived,
     scan_solution_urls,
+    solution_paths,
+    xdr_detection_files,
     yaml_files,
 )
 from solution_manager.migration.parser_bindings import normalize_parser_bindings
@@ -318,54 +329,12 @@ def iso_duration(value: Any, default: str = "PT1H") -> tuple[str, str | None]:
     }[unit], None
 
 
-def solution_paths(solution: str | Path) -> tuple[Path, Path, Path]:
-    root = Path(solution).expanduser().resolve()
-    analytic = root / "Analytic Rules"
-    output = root / "XDR Detections"
-    if not root.is_dir():
-        raise ValueError(f"solution path does not exist: {root}")
-    if not analytic.is_dir():
-        legacy_analytic = root / "Analytics Rules"
-        if legacy_analytic.is_dir():
-            analytic = legacy_analytic
-        else:
-            raise ValueError(
-                f"solution has no 'Analytic Rules' or 'Analytics Rules' folder: {root}"
-            )
-    return root, analytic, output
-
-
-def load_config(output_dir: Path, explicit: str | Path | None = None) -> dict[str, Any]:
-    path = (
-        Path(explicit).expanduser().resolve()
-        if explicit
-        else existing_artifact_path(output_dir.parent, "migration-config.yaml")
-    )
-    if not path.exists():
-        return {}
-    with path.open(encoding="utf-8") as handle:
-        value = yaml.safe_load(handle) or {}
-    if not isinstance(value, dict):
-        raise ValueError(f"migration config must contain a YAML object: {path}")
-    return value
-
-
-def analytic_rule_files(solution: str | Path) -> list[Path]:
-    _, analytic, _ = solution_paths(solution)
-    return yaml_files(analytic)
-
-
-def xdr_detection_files(output: Path) -> list[Path]:
-    return list(
-        path
-        for path in yaml_files(output)
-        if path.name.lower() not in {"migration-config.yaml", "migration-config.yml"}
-    )
-
-
 def inspect_solution(solution: str | Path) -> dict[str, Any]:
-    root, analytic, output = solution_paths(solution)
-    files = analytic_rule_files(root)
+    root, analytic, output = solution_paths(
+        solution,
+        require_analytic_rules=not (Path(solution).expanduser().resolve() / "XDR Detections").is_dir(),
+    )
+    files = yaml_files(analytic) if analytic.is_dir() else []
     return {
         "solution": str(root),
         "analyticRulesDirectory": str(analytic),
@@ -2103,23 +2072,6 @@ def _supplemental_custom_details(
     return details, evidence, warnings, information, errors
 
 
-def custom_detail_schema_errors(document: dict[str, Any], schema: list[dict[str, Any]]) -> list[str]:
-    alert = ((document.get("properties") or {}).get("detectionAction") or {}).get("alertTemplate") or {}
-    details = alert.get("customDetails") or {}
-    if not isinstance(details, dict):
-        return ["customDetails must be an object"]
-    if not isinstance(schema, list):
-        return ["customDetails binding verification requires a runtime output schema"]
-    columns = {
-        str(item.get("name") or item.get("Name") or "")
-        for item in schema if isinstance(item, dict)
-    }
-    return [
-        f"customDetails {key!r} column `{column}` is absent from the runtime output schema"
-        for key, column in details.items() if not isinstance(column, str) or column not in columns
-    ]
-
-
 def custom_detail_binding_warnings(document: dict[str, Any]) -> list[str]:
     properties = document.get("properties") or {}
     query = ((properties.get("queryCondition") or {}).get("queryText") or "")
@@ -2645,16 +2597,6 @@ def xdr_version_error(version: Any) -> str | None:
     )
 
 
-def is_sentinel_derived(document: dict[str, Any]) -> bool:
-    provenance = document.get("contentProvenance") or {}
-    source = provenance.get("source") or {}
-    conversion = provenance.get("conversion") or {}
-    return (
-        source.get("platform") == "Microsoft Sentinel"
-        and source.get("kind") == "AnalyticsRule"
-    ) or conversion.get("tool") == "sentinel-to-xdr-migration"
-
-
 def _existing_identity_error(
     document: Any, source_id: str, source_path: str, source_name: str,
 ) -> str | None:
@@ -2725,16 +2667,12 @@ def validate_document(document: dict[str, Any]) -> list[str]:
     conversion = provenance.get("conversion") or {}
     properties = document.get("properties") or {}
     detection_id = properties.get("id")
-    id_is_guid = isinstance(detection_id, str) and re.fullmatch(SOURCE_ID_PATTERN, detection_id)
     id_is_prefixed_guid = isinstance(detection_id, str) and re.fullmatch(
         PREFIXED_SOURCE_ID_PATTERN, detection_id,
     )
-    if not id_is_guid and not id_is_prefixed_guid and not (
-        isinstance(detection_id, str) and re.fullmatch(GRAPH_DETECTION_ID_PATTERN, detection_id)
-    ):
+    if not id_is_prefixed_guid:
         errors.append(
-            "properties.id must be a Graph-compatible identifier beginning with a letter "
-            "and containing at most 100 letters, digits, dashes, or underscores"
+            "properties.id must use the canonical xdr- prefix plus a full hyphenated GUID (for example, xdr-11111111-2222-3333-4444-555555555555)"
         )
     if is_sentinel_derived(document):
         if not isinstance(source.get("id"), str) or not re.fullmatch(SOURCE_ID_PATTERN, source["id"]):
@@ -2746,24 +2684,44 @@ def validate_document(document: dict[str, Any]) -> list[str]:
                 "contentProvenance.source.id; reconvert with --overwrite to update local "
                 "artifacts only, not deployed rule migration"
             )
-    for field in ("platform", "kind", "id", "path", "querySha256"):
-        if not source.get(field):
-            errors.append(f"contentProvenance.source.{field} is required")
-    if conversion.get("status") not in {"converted", "needsReview"}:
-        errors.append("contentProvenance.conversion.status is invalid")
-    if conversion.get("errors"):
-        errors.extend(f"conversion: {value}" for value in conversion["errors"])
+        for field in ("platform", "kind", "id", "path", "querySha256"):
+            if not source.get(field):
+                errors.append(f"contentProvenance.source.{field} is required")
+        if conversion.get("status") not in {"converted", "needsReview"}:
+            errors.append("contentProvenance.conversion.status is invalid")
+        if conversion.get("errors"):
+            errors.extend(f"conversion: {value}" for value in conversion["errors"])
+    else:
+        if isinstance(provenance, dict) and ("source" in provenance or "conversion" in provenance):
+            if not isinstance(provenance.get("source"), dict):
+                errors.append("contentProvenance.source is required")
+            if not isinstance(provenance.get("conversion"), dict):
+                errors.append("contentProvenance.conversion is required")
+        if isinstance(provenance.get("source"), dict):
+            for field in ("platform", "kind"):
+                if not source.get(field):
+                    errors.append(f"contentProvenance.source.{field} is required")
+        if isinstance(provenance.get("conversion"), dict):
+            if conversion.get("status") not in {"converted", "needsReview"}:
+                errors.append("contentProvenance.conversion.status is invalid")
+            if conversion.get("errors"):
+                errors.extend(f"conversion: {value}" for value in conversion["errors"])
     if properties.get("status") != "disabled":
         errors.append("properties.status must be disabled")
     query = ((properties.get("queryCondition") or {}).get("queryText") or "")
     if not query:
         errors.append("properties.queryCondition.queryText is required")
     schedule = properties.get("schedule") or {}
+    if not isinstance(schedule, dict) or not str(schedule.get("frequency") or "").strip():
+        errors.append("properties.schedule.frequency is required")
     if isinstance(schedule, dict) and schedule.get("frequency") in {"PT0S", "NRT"}:
         nrt_eligible, nrt_reasons = _assess_nrt_eligibility(query, query)
         if not nrt_eligible and conversion.get("status") != "needsReview":
             errors.extend(f"NRT schedule: {reason}" for reason in nrt_reasons)
     alert = ((properties.get("detectionAction") or {}).get("alertTemplate") or {})
+    severity = alert.get("severity") if isinstance(alert, dict) else None
+    if not isinstance(severity, str) or severity not in SUPPORTED_SEVERITIES:
+        errors.append(f"alertTemplate.severity must be one of {sorted(SUPPORTED_SEVERITIES)}")
     mappings = alert.get("entityMappings") or {}
     if isinstance(mappings, dict):
         for collection_name in ("files", "processes"):
@@ -2834,6 +2792,9 @@ def validate_document(document: dict[str, Any]) -> list[str]:
     return errors
 
 
+validate_xdr_detection_document = validate_document
+
+
 def convert_solution(
     solution: str | Path,
     *,
@@ -2841,8 +2802,9 @@ def convert_solution(
     config_path: str | Path | None = None,
     rule_id: str | None = None,
 ) -> dict[str, Any]:
-    root, analytic, output = solution_paths(solution)
-    sources = analytic_rule_files(root)
+    has_xdr_detections = (Path(solution).expanduser().resolve() / "XDR Detections").is_dir()
+    root, analytic, output = solution_paths(solution, require_analytic_rules=not has_xdr_detections)
+    sources = analytic_rule_files(root, require_analytic_rules=not has_xdr_detections)
     existing_outputs = xdr_detection_files(output)
     existing_by_source: dict[str, list[Path]] = {}
     existing_by_id: dict[str, list[Path]] = {}
@@ -3167,6 +3129,12 @@ def convert_solution(
     reports = report_directory(root, create=True)
     transformation_report = reports / "transformation-report.html"
     manifest_path = reports / "manifest.json"
+    standalone_custom_detections = [
+        path.relative_to(root).as_posix()
+        for path in sorted(xdr_detection_files(output))
+        if isinstance(existing_documents.get(path), dict)
+        and not is_sentinel_derived(existing_documents[path])
+    ]
     summary = {
         "solution": str(root),
         "scope": {
@@ -3192,6 +3160,7 @@ def convert_solution(
             for result in results
         ),
         "conflicts": sum(result.status == "conflict" for result in results),
+        "standaloneCustomDetections": standalone_custom_detections,
         "results": [
             {
                 **result.as_dict(),
@@ -3215,7 +3184,7 @@ def convert_solution(
 
 
 def validate_solution(solution: str | Path) -> dict[str, Any]:
-    root, _, output = solution_paths(solution)
+    root, _, output = solution_paths(solution, require_analytic_rules=False)
     files = xdr_detection_files(output) if output.exists() else []
     results = []
     results_by_id: dict[str, list[dict[str, Any]]] = {}
@@ -3274,28 +3243,38 @@ def validate_solution(solution: str | Path) -> dict[str, Any]:
 
 
 def runtime_validation_plan(solution: str | Path) -> dict[str, Any]:
-    root, _, output = solution_paths(solution)
+    root, _, output = solution_paths(solution, require_analytic_rules=False)
     plan = []
     for path in xdr_detection_files(output):
         with path.open(encoding="utf-8-sig") as handle:
             document = yaml.safe_load(handle) or {}
-        source_path = content_path(root, document["contentProvenance"]["source"]["path"])
-        with source_path.open(encoding="utf-8-sig") as handle:
-            source = yaml.safe_load(handle) or {}
+        source_path_value = ((document.get("contentProvenance") or {}).get("source") or {}).get("path")
+        source_path: Path | None = None
+        source: dict[str, Any] = {}
+        if isinstance(source_path_value, str) and source_path_value.strip():
+            candidate = content_path(root, source_path_value)
+            if candidate.is_file():
+                source_path = candidate
+                with source_path.open(encoding="utf-8-sig") as handle:
+                    source = yaml.safe_load(handle) or {}
+        sentinel_query = str(source.get("query") or "")
+        ah_query = str(((document.get("properties") or {}).get("queryCondition") or {}).get("queryText") or "")
         plan.append(
             {
                 "detection": path.relative_to(output).as_posix(),
-                "sourceRule": str(source_path),
-                "sentinelQuery": str(source.get("query") or ""),
-                "advancedHuntingQuery": document["properties"]["queryCondition"]["queryText"],
-                "sentinelQuerySha256": hashlib.sha256(
-                    str(source.get("query") or "").encode("utf-8")
-                ).hexdigest(),
+                "sourceRule": str(source_path) if source_path is not None else None,
+                "sentinelQuery": sentinel_query,
+                "advancedHuntingQuery": ah_query,
+                "sentinelQuerySha256": (
+                    hashlib.sha256(sentinel_query.encode("utf-8")).hexdigest()
+                    if source_path is not None
+                    else str(((document.get("contentProvenance") or {}).get("source") or {}).get("querySha256") or "")
+                ),
                 "advancedHuntingQuerySha256": hashlib.sha256(
-                    document["properties"]["queryCondition"]["queryText"].encode("utf-8")
+                    ah_query.encode("utf-8")
                 ).hexdigest(),
                 "customDetailBindings": deepcopy(
-                    document["properties"]["detectionAction"]["alertTemplate"].get("customDetails") or {}
+                    (((document.get("properties") or {}).get("detectionAction") or {}).get("alertTemplate") or {}).get("customDetails") or {}
                 ),
             }
         )

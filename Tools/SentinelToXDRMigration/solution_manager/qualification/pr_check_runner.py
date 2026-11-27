@@ -23,7 +23,9 @@ from solution_manager.core.content_paths import (
     strip_microsoft_url_locale,
 )
 from solution_manager.qualification.pr_applicability import (
+    classify_xdr_detection_files,
     determine_pr_applicability,
+    is_migrated_xdr_detection_doc,
 )
 from solution_manager.reporting.decision_manifest import (
     sanitize_decision_text,
@@ -652,13 +654,19 @@ def _extract_xdr_detection_fields(doc: Mapping[str, Any]) -> dict[str, Any]:
         or ""
     ).strip()
 
+    is_migrated = is_migrated_xdr_detection_doc(doc)
+
     raw_src_kind = str(
         top_conv.get("sourceKind")
         or prov.get("sourceKind")
         or prov_conv.get("sourceKind")
         or prov_source.get("ruleKind")
         or (prov_source.get("kind") if str(prov_source.get("kind") or "") not in {"AnalyticsRule", "CustomDetection"} else "")
-        or (doc.get("kind") if str(doc.get("kind") or "") != "CustomDetection" else "")
+        or (
+            doc.get("kind")
+            if is_migrated and str(doc.get("kind") or "") != "CustomDetection"
+            else ""
+        )
         or "Scheduled"
     ).strip()
 
@@ -682,6 +690,7 @@ def _extract_xdr_detection_fields(doc: Mapping[str, Any]) -> dict[str, Any]:
         "frequency": frequency,
         "entities": entities,
         "customDetails": custom_details,
+        "isMigrated": is_migrated,
         "sourceRuleId": source_rule_id,
         "sourceRulePath": source_rule_path,
         "sourceRuleSha256": source_rule_sha256,
@@ -2940,6 +2949,17 @@ def _evaluate_migration_checks(
 
         xdr_det_files = files_by_type.get("xdr-detections", [])
         ar_files = files_by_type.get("analytic-rules", [])
+        det_classification = classify_xdr_detection_files(solution_root, xdr_det_files)
+        migrated_xdr_det_files = list(
+            applicability.get("migratedXdrDetectionFiles")
+            if isinstance(applicability.get("migratedXdrDetectionFiles"), list)
+            else det_classification["migratedFiles"]
+        )
+        native_xdr_det_files = list(
+            applicability.get("nativeXdrDetectionFiles")
+            if isinstance(applicability.get("nativeXdrDetectionFiles"), list)
+            else det_classification["nativeFiles"]
+        )
 
         # ---------------------------------------------------------------------
         # MIG-V01 (TK-V02): XDR detection identity contract (xdr-<GUID>, path & SHA-256)
@@ -2948,13 +2968,18 @@ def _evaluate_migration_checks(
             issues: list[str] = []
             refs: list[dict[str, Any]] = []
             verified_ids: list[str] = []
+            skipped_native: list[str] = []
             for rel in xdr_det_files:
-                refs.append(_make_evidence_ref("XDR Detection YAML", rel))
                 doc, err = _load_yaml_safe(solution_root / rel)
                 if err or not isinstance(doc, Mapping):
+                    refs.append(_make_evidence_ref("XDR Detection YAML", rel))
                     issues.append(f"{rel}: {err or 'invalid YAML'}")
                     continue
                 xdr_fields = _extract_xdr_detection_fields(doc)
+                if not xdr_fields["isMigrated"]:
+                    skipped_native.append(rel)
+                    continue
+                refs.append(_make_evidence_ref("XDR Detection YAML", rel))
                 det_id = xdr_fields["id"]
                 src_id = xdr_fields["sourceRuleId"]
                 src_path = xdr_fields["sourceRulePath"]
@@ -2969,26 +2994,49 @@ def _evaluate_migration_checks(
                 else:
                     verified_ids.append(f"{det_id} (sha256={src_sha[:12]})")
 
-            if issues:
+            if not verified_ids and not issues and skipped_native:
+                results.append(
+                    _build_check_result(
+                        cdef,
+                        status="NOT_APPLICABLE",
+                        what_we_checked=cdef["originalCriterion"],
+                        what_we_observed=(
+                            f"All {len(skipped_native)} XDR Detection(s) are native/standalone without Sentinel migration provenance "
+                            f"({', '.join(skipped_native)})."
+                        ),
+                        why_passed_or_failed="Not applicable: all XDR Detections are native/standalone without migration provenance.",
+                        evidence_refs=[_make_evidence_ref("Native XDR Detection YAML", r) for r in skipped_native],
+                    )
+                )
+            elif issues:
                 results.append(
                     _build_check_result(
                         cdef,
                         status="FAIL",
-                        what_we_checked="Verified xdr-<source GUID> identity and sourceRulePath / sourceRuleSha256 provenance on every XDR Detection.",
-                        what_we_observed=f"Checked {len(xdr_det_files)} XDR Detection(s); issues: {'; '.join(issues)}.",
+                        what_we_checked="Verified xdr-<source GUID> identity and sourceRulePath / sourceRuleSha256 provenance on every migrated XDR Detection.",
+                        what_we_observed=(
+                            f"Checked {len(verified_ids) + len(issues)} migrated XDR Detection(s)"
+                            + (f" (skipped {len(skipped_native)} native/standalone)" if skipped_native else "")
+                            + f"; issues: {'; '.join(issues)}."
+                        ),
                         why_passed_or_failed=f"Identity/provenance contract violation: {'; '.join(issues)}",
                         evidence_refs=refs,
                         author_exceptions_by_id=author_exceptions_by_id,
                     )
                 )
             else:
+                native_note = (
+                    f"; skipped {len(skipped_native)} native/standalone detection(s) ({', '.join(skipped_native)})"
+                    if skipped_native
+                    else ""
+                )
                 results.append(
                     _build_check_result(
                         cdef,
                         status="PASS",
-                        what_we_checked="Verified xdr-<source GUID> identity and sourceRulePath / sourceRuleSha256 provenance on every XDR Detection.",
-                        what_we_observed=f"Verified {len(verified_ids)} XDR Detection identity & SHA-256 provenance record(s): {', '.join(verified_ids)}.",
-                        why_passed_or_failed="All XDR detections satisfy the TK-V02 xdr-<source GUID> and SHA-256 provenance contract.",
+                        what_we_checked="Verified xdr-<source GUID> identity and sourceRulePath / sourceRuleSha256 provenance on every migrated XDR Detection.",
+                        what_we_observed=f"Verified {len(verified_ids)} XDR Detection identity & SHA-256 provenance record(s): {', '.join(verified_ids)}{native_note}.",
+                        why_passed_or_failed="All migrated XDR detections satisfy the TK-V02 xdr-<source GUID> and SHA-256 provenance contract.",
                         evidence_refs=refs,
                         author_exceptions_by_id=author_exceptions_by_id,
                     )
@@ -3014,7 +3062,7 @@ def _evaluate_migration_checks(
 
                 if not freq:
                     issues.append(f"{rel}: missing queryFrequency/schedule frequency")
-                elif src_kind.upper() == "NRT" and freq.upper() not in {"PT0S", "CONTINUOUS"} and not fallback_reason:
+                elif xdr_fields["isMigrated"] and src_kind.upper() == "NRT" and freq.upper() not in {"PT0S", "CONTINUOUS"} and not fallback_reason:
                     issues.append(f"{rel}: NRT source rule downgraded to '{freq}' without documented scheduleFallbackRationale")
                 else:
                     schedule_notes.append(f"{Path(rel).name}:{freq}")
@@ -3159,6 +3207,20 @@ def _evaluate_migration_checks(
         # E2E-Q03 (TK-Q09/Q10): Sentinel AR <-> Defender XDR CD strict alert parity
         # ---------------------------------------------------------------------
         elif cid == "E2E-Q03":
+            if not migrated_xdr_det_files:
+                results.append(
+                    _build_check_result(
+                        cdef,
+                        status="NOT_APPLICABLE",
+                        what_we_checked=cdef["originalCriterion"],
+                        what_we_observed=(
+                            f"No migrated XDR Detections with Sentinel provenance found "
+                            f"({len(native_xdr_det_files)} native/standalone XDR Detection(s) skipped)."
+                        ),
+                        why_passed_or_failed="Not applicable: solution contains 0 migrated XDR Detections requiring AR<->CD parity.",
+                    )
+                )
+                continue
             ap_ev = (
                 qualification_evidence.get("alertParity")
                 or qualification_evidence.get("ruleParity")
@@ -3179,25 +3241,395 @@ def _evaluate_migration_checks(
                         author_exceptions_by_id=author_exceptions_by_id,
                     )
                 )
-            elif not simulated_flag and isinstance(ap_ev, Mapping) and (
-                ap_ev.get("alertParityVerified") is True
-                or ap_ev.get("parityPassed") is True
-                or ap_ev.get("passed") is True
-                or (ap_ev.get("status") == "passed" and ap_ev.get("alertParityVerified") is not False)
-            ):
-                pair_count = int(ap_ev.get("pairCount") or len(ap_ev.get("pairs") or []) or max(len(ar_files), len(xdr_det_files), 1))
+                continue
+
+            migrated_primary_tokens_by_rel: dict[str, set[str]] = {}
+            migrated_fallback_tokens_by_rel: dict[str, set[str]] = {}
+            native_primary_tokens_by_rel: dict[str, set[str]] = {}
+            native_fallback_tokens_by_rel: dict[str, set[str]] = {}
+            migrated_paths_by_rel: dict[str, set[str]] = {}
+            migrated_ids_by_rel: dict[str, set[str]] = {}
+            migrated_fallback_by_rel: dict[str, set[str]] = {}
+            native_paths_by_rel: dict[str, set[str]] = {}
+            native_ids_by_rel: dict[str, set[str]] = {}
+            native_fallback_by_rel: dict[str, set[str]] = {}
+            for rel in migrated_xdr_det_files:
+                norm_rel = Path(rel).as_posix().lower()
+                cand_paths = {
+                    rel.lower(),
+                    norm_rel,
+                }
+                if norm_rel.startswith("xdr detections/"):
+                    sub_rel = norm_rel[len("xdr detections/"):].lstrip("/")
+                    if sub_rel:
+                        cand_paths.add(sub_rel)
+                cand_ids: set[str] = set()
+                fallback_toks = {
+                    Path(rel).name.lower(),
+                    Path(rel).stem.lower(),
+                }
+                doc, err = _load_yaml_safe(solution_root / rel)
+                if not err and isinstance(doc, Mapping):
+                    fields = _extract_xdr_detection_fields(doc)
+                    prov = doc.get("contentProvenance")
+                    source = prov.get("source") if isinstance(prov, Mapping) else None
+                    for token in (
+                        fields.get("id"),
+                        fields.get("sourceRuleId"),
+                        source.get("id") if isinstance(source, Mapping) else None,
+                    ):
+                        if token and str(token).strip():
+                            cand_ids.add(str(token).strip().lower())
+                    if fields.get("displayName") and str(fields.get("displayName")).strip():
+                        fallback_toks.add(str(fields.get("displayName")).strip().lower())
+                    for raw_src_path in (
+                        source.get("path") if isinstance(source, Mapping) else None,
+                        doc.get("sourceRulePath"),
+                    ):
+                        if isinstance(raw_src_path, str) and raw_src_path.strip():
+                            norm_src = raw_src_path.strip().replace("\\", "/").lower()
+                            cand_paths.add(norm_src)
+                            for prefix in ("analytic rules/", "analytics rules/"):
+                                if norm_src.startswith(prefix):
+                                    sub_src = norm_src[len(prefix):].lstrip("/")
+                                    if sub_src:
+                                        cand_paths.add(sub_src)
+                            fallback_toks.add(Path(norm_src).name.lower())
+                            fallback_toks.add(Path(norm_src).stem.lower())
+                migrated_paths_by_rel[rel] = cand_paths
+                migrated_ids_by_rel[rel] = cand_ids
+                migrated_fallback_by_rel[rel] = fallback_toks
+                migrated_primary_tokens_by_rel[rel] = cand_paths | cand_ids
+                migrated_fallback_tokens_by_rel[rel] = fallback_toks | cand_paths | cand_ids
+            for rel in native_xdr_det_files:
+                norm_rel = Path(rel).as_posix().lower()
+                cand_paths = {
+                    rel.lower(),
+                    norm_rel,
+                }
+                if norm_rel.startswith("xdr detections/"):
+                    sub_rel = norm_rel[len("xdr detections/"):].lstrip("/")
+                    if sub_rel:
+                        cand_paths.add(sub_rel)
+                cand_ids = set()
+                fallback_toks = {
+                    Path(rel).name.lower(),
+                    Path(rel).stem.lower(),
+                }
+                doc, err = _load_yaml_safe(solution_root / rel)
+                if not err and isinstance(doc, Mapping):
+                    fields = _extract_xdr_detection_fields(doc)
+                    for token in (fields.get("id"),):
+                        if token and str(token).strip():
+                            cand_ids.add(str(token).strip().lower())
+                    if fields.get("displayName") and str(fields.get("displayName")).strip():
+                        fallback_toks.add(str(fields.get("displayName")).strip().lower())
+                native_paths_by_rel[rel] = cand_paths
+                native_ids_by_rel[rel] = cand_ids
+                native_fallback_by_rel[rel] = fallback_toks
+                native_primary_tokens_by_rel[rel] = cand_paths | cand_ids
+                native_fallback_tokens_by_rel[rel] = fallback_toks | cand_paths | cand_ids
+
+            ap_ev_map = ap_ev if isinstance(ap_ev, Mapping) else {}
+            raw_ap_status = str(
+                ap_ev_map.get("status")
+                or ap_ev_map.get("result")
+                or ap_ev_map.get("verdict")
+                or ""
+            ).strip().lower()
+            has_aggregate_failure = bool(
+                ap_ev_map.get("comparisonError")
+                or ap_ev_map.get("scopeVerificationError")
+                or ap_ev_map.get("passed") is False
+                or ap_ev_map.get("parityPassed") is False
+                or ap_ev_map.get("alertParityVerified") is False
+                or raw_ap_status in {"failed", "fail", "error", "blocked", "incomplete"}
+            )
+
+            raw_items: Any = []
+            for _key in ("comparisons", "results", "detections", "rules", "pairs"):
+                _val = ap_ev_map.get(_key)
+                if isinstance(_val, list) and len(_val) > 0:
+                    raw_items = _val
+                    break
+            if raw_items == []:
+                for _key in ("comparisons", "results", "detections", "rules", "pairs"):
+                    _val = ap_ev_map.get(_key)
+                    if _val is not None and not isinstance(_val, list):
+                        raw_items = _val
+                        break
+
+            def _expand_item_path_group(raw_val: str) -> set[str]:
+                raw = raw_val.strip().lower()
+                norm = raw.replace("\\", "/")
+                while norm.startswith("./"):
+                    norm = norm[2:]
+                group = {raw, norm}
+                sol_prefix = f"solutions/{solution_root.name.lower()}/"
+                if norm.startswith(sol_prefix):
+                    after_sol = norm[len(sol_prefix):].lstrip("/")
+                    if after_sol:
+                        group.add(after_sol)
+                for candidate in list(group):
+                    for prefix in ("xdr detections/", "analytic rules/", "analytics rules/"):
+                        if candidate.startswith(prefix):
+                            sub = candidate[len(prefix):].lstrip("/")
+                            if sub:
+                                group.add(sub)
+                return group
+
+            def _item_path_groups(item: Mapping[str, Any]) -> list[set[str]]:
+                groups: list[set[str]] = []
+                for k in (
+                    "detection",
+                    "customDetection",
+                    "xdrDetection",
+                    "detectionPath",
+                    "xdrDetectionPath",
+                    "file",
+                    "path",
+                    "analyticRule",
+                    "analyticRulePath",
+                    "sourceRulePath",
+                ):
+                    val = item.get(k)
+                    if isinstance(val, str) and val.strip():
+                        groups.append(_expand_item_path_group(val))
+                for nested_key in (
+                    "customDetection",
+                    "xdrDetection",
+                    "detection",
+                    "analyticRule",
+                    "sentinelRule",
+                    "sourceRule",
+                ):
+                    nested = item.get(nested_key)
+                    if isinstance(nested, Mapping):
+                        for sub_key in ("path", "file"):
+                            sub_val = nested.get(sub_key)
+                            if isinstance(sub_val, str) and sub_val.strip():
+                                groups.append(_expand_item_path_group(sub_val))
+                return groups
+
+            def _item_id_tokens(item: Mapping[str, Any]) -> set[str]:
+                tokens: set[str] = set()
+                for k in (
+                    "id",
+                    "ruleId",
+                    "detectionId",
+                    "customDetectionId",
+                    "xdrId",
+                    "targetRuleId",
+                    "sourceRuleId",
+                    "analyticRuleId",
+                    "sentinelRuleId",
+                    "originalRuleId",
+                ):
+                    val = item.get(k)
+                    if isinstance(val, str) and val.strip():
+                        tokens.add(val.strip().lower())
+                for nested_key in (
+                    "customDetection",
+                    "xdrDetection",
+                    "detection",
+                    "analyticRule",
+                    "sentinelRule",
+                    "sourceRule",
+                ):
+                    nested = item.get(nested_key)
+                    if isinstance(nested, Mapping):
+                        for sub_key in ("id", "ruleId", "detectionId", "customDetectionId"):
+                            sub_val = nested.get(sub_key)
+                            if isinstance(sub_val, str) and sub_val.strip():
+                                tokens.add(sub_val.strip().lower())
+                return tokens
+
+            def _item_fallback_tokens(item: Mapping[str, Any]) -> set[str]:
+                tokens: set[str] = set()
+                for k in ("rule", "name", "displayName"):
+                    val = item.get(k)
+                    if isinstance(val, str) and val.strip():
+                        raw = val.strip().lower()
+                        tokens.add(raw)
+                        tokens.add(Path(raw).name.lower())
+                        tokens.add(Path(raw).stem.lower())
+                for nested_key in (
+                    "customDetection",
+                    "xdrDetection",
+                    "detection",
+                    "analyticRule",
+                    "sentinelRule",
+                    "sourceRule",
+                ):
+                    nested = item.get(nested_key)
+                    if isinstance(nested, Mapping):
+                        for sub_key in ("name", "displayName"):
+                            sub_val = nested.get(sub_key)
+                            if isinstance(sub_val, str) and sub_val.strip():
+                                raw = sub_val.strip().lower()
+                                tokens.add(raw)
+                                tokens.add(Path(raw).name.lower())
+                                tokens.add(Path(raw).stem.lower())
+                return tokens
+
+            def _item_matches_candidate(
+                path_groups: list[set[str]],
+                id_tokens: set[str],
+                fallback_tokens: set[str],
+                cand_paths: set[str],
+                cand_ids: set[str],
+                cand_fallback: set[str],
+            ) -> bool:
+                if path_groups or id_tokens:
+                    if path_groups and not all(bool(group & cand_paths) for group in path_groups):
+                        return False
+                    if id_tokens and (not cand_ids or not id_tokens.issubset(cand_ids)):
+                        return False
+                    return True
+                return bool(fallback_tokens and (fallback_tokens & cand_fallback))
+
+            def _item_migrated_parity_ok(item: Mapping[str, Any]) -> bool:
+                raw_mode = str(item.get("mode") or "").strip().lower()
+                if item.get("cdOnly") is True or raw_mode in {"cd-only", "cd_only", "cdonly"}:
+                    return False
+                if item.get("native") is True or item.get("isMigrated") is False:
+                    return False
+                for ar_key in ("analyticRule", "sentinelAlert", "arAlert"):
+                    if ar_key in item and item.get(ar_key) is None:
+                        return False
+                raw_status = str(
+                    item.get("status") or item.get("result") or item.get("verdict") or ""
+                ).strip().lower()
+                if (
+                    item.get("passed") is False
+                    or item.get("parityPassed") is False
+                    or item.get("alertParityVerified") is False
+                    or raw_status in {"failed", "fail", "error", "blocked", "incomplete", "not_applicable", "skipped_native"}
+                ):
+                    return False
+                return bool(
+                    item.get("passed") is True
+                    or item.get("parityPassed") is True
+                    or item.get("alertParityVerified") is True
+                    or raw_status in {"passed", "pass", "verified", "succeeded", "complete", "completed", "ok", "matched", "match"}
+                )
+
+            def _item_native_ok(item: Mapping[str, Any]) -> bool:
+                raw_status = str(
+                    item.get("status") or item.get("result") or item.get("verdict") or ""
+                ).strip().lower()
+                if (
+                    item.get("passed") is False
+                    or item.get("parityPassed") is False
+                    or item.get("alertParityVerified") is False
+                    or raw_status in {"failed", "fail", "error", "blocked", "incomplete"}
+                ):
+                    return False
+                return bool(
+                    item.get("passed") is True
+                    or item.get("parityPassed") is True
+                    or item.get("alertParityVerified") is True
+                    or raw_status in {
+                        "passed",
+                        "pass",
+                        "verified",
+                        "succeeded",
+                        "complete",
+                        "completed",
+                        "ok",
+                        "matched",
+                        "match",
+                        "not_applicable",
+                        "skipped_native",
+                    }
+                )
+
+            if isinstance(raw_items, list) and len(raw_items) > 0:
+                matched_migrated: dict[str, list[Mapping[str, Any]]] = {
+                    rel: [] for rel in migrated_primary_tokens_by_rel
+                }
+                matched_native: dict[str, list[Mapping[str, Any]]] = {
+                    rel: [] for rel in native_primary_tokens_by_rel
+                }
+                unmatched_or_ambiguous = False
+                for item in raw_items:
+                    if not isinstance(item, Mapping):
+                        unmatched_or_ambiguous = True
+                        break
+                    item_paths = _item_path_groups(item)
+                    item_ids = _item_id_tokens(item)
+                    item_fallback = _item_fallback_tokens(item)
+                    m_rels = [
+                        rel
+                        for rel in migrated_primary_tokens_by_rel
+                        if _item_matches_candidate(
+                            item_paths,
+                            item_ids,
+                            item_fallback,
+                            migrated_paths_by_rel[rel],
+                            migrated_ids_by_rel[rel],
+                            migrated_fallback_by_rel[rel],
+                        )
+                    ]
+                    n_rels = [
+                        rel
+                        for rel in native_primary_tokens_by_rel
+                        if _item_matches_candidate(
+                            item_paths,
+                            item_ids,
+                            item_fallback,
+                            native_paths_by_rel[rel],
+                            native_ids_by_rel[rel],
+                            native_fallback_by_rel[rel],
+                        )
+                    ]
+                    if len(m_rels) == 1 and len(n_rels) == 0:
+                        matched_migrated[m_rels[0]].append(item)
+                    elif len(n_rels) == 1 and len(m_rels) == 0:
+                        matched_native[n_rels[0]].append(item)
+                    else:
+                        unmatched_or_ambiguous = True
+                per_file_migrated_parity_ok = (
+                    not has_aggregate_failure
+                    and not unmatched_or_ambiguous
+                    and bool(migrated_primary_tokens_by_rel)
+                    and all(
+                        len(items) == 1 and _item_migrated_parity_ok(items[0])
+                        for items in matched_migrated.values()
+                    )
+                    and all(
+                        len(items) <= 1 and (not items or _item_native_ok(items[0]))
+                        for items in matched_native.values()
+                    )
+                )
+                top_level_parity_ok = False
+            else:
+                per_file_migrated_parity_ok = False
+                top_level_parity_ok = False
+
+            if not simulated_flag and (top_level_parity_ok or per_file_migrated_parity_ok):
+                pair_count = int(
+                    ap_ev_map.get("pairCount")
+                    or len(migrated_xdr_det_files)
+                    or max(len(ar_files), 1)
+                )
                 s_alerts = int(ap_ev.get("sentinelAlertCount") or pair_count)
                 x_alerts = int(ap_ev.get("xdrAlertCount") or pair_count)
+                native_skip_note = (
+                    f" ({len(native_xdr_det_files)} native/standalone XDR Detection(s) skipped)"
+                    if native_xdr_det_files
+                    else ""
+                )
                 results.append(
                     _build_check_result(
                         cdef,
                         status="PASS",
                         what_we_checked="Verified strict alert parity between Sentinel Analytic Rules and migrated Defender XDR Custom Detections from shared mock data.",
                         what_we_observed=(
-                            f"Verified strict parity across {pair_count} AR<->CD pair(s): "
+                            f"Verified strict parity across {pair_count} AR<->CD pair(s){native_skip_note}: "
                             f"sentinelAlertCount={s_alerts}, xdrAlertCount={x_alerts}, entities and customDetails matched."
                         ),
-                        why_passed_or_failed="Sentinel Analytic Rules and Defender XDR Custom Detections achieved strict alert parity.",
+                        why_passed_or_failed="Sentinel Analytic Rules and migrated Defender XDR Custom Detections achieved strict alert parity.",
                         evidence_refs=refs,
                         author_exceptions_by_id=author_exceptions_by_id,
                     )

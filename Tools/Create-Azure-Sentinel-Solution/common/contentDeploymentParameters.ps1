@@ -128,10 +128,10 @@ function Add-SolutionContentDeploymentParameters {
         $UiDefinition.parameters.outputs | Add-Member -NotePropertyName $entry.Name -NotePropertyValue "[steps('contentSelection').$($entry.Name)]"
     }
     if ($elements.Count -gt 0) {
-        $UiDefinition.parameters.steps += [pscustomobject]@{
+        $UiDefinition.parameters.steps = @($UiDefinition.parameters.steps) + @([pscustomobject]@{
             name = 'contentSelection'
             label = 'Content selection'
             elements = $elements
-        }
+        })
     }
 }

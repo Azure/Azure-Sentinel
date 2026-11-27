@@ -187,6 +187,7 @@ function ConvertTo-V31CustomDetectionId {
         [Parameter(Mandatory = $true)]
         [string]$DetectionId,
         [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
         [string]$SourceId,
         [Parameter(Mandatory = $true)]
         [bool]$SentinelDerived,
@@ -223,8 +224,8 @@ function ConvertTo-V31CustomDetectionId {
     elseif ($DetectionId -match $prefixedPattern) {
         $normalized = "xdr-$($Matches[1])"
     }
-    elseif ($DetectionId -cnotmatch '\A[A-Za-z][A-Za-z0-9_-]{0,99}\z') {
-        throw "Custom Detection '$ContentPath' ID '$DetectionId' is invalid for Microsoft Graph; use a letter followed by at most 99 letters, digits, dashes, or underscores."
+    else {
+        throw "Custom Detection '$ContentPath' ID '$DetectionId' must be a GUID or its canonical xdr-<GUID> form; arbitrary custom IDs are not supported."
     }
 
     if ($normalized -cnotmatch '\A[A-Za-z][A-Za-z0-9_-]{0,99}\z') {
@@ -475,9 +476,19 @@ function Set-XdrCustomDetectionDependencyCriteria {
         throw "Expected exactly one solution contentPackages resource while adding Custom Detection dependencies; found $($contentPackages.Count)."
     }
 
-    $dependencies = $contentPackages[0].properties.dependencies
-    if ($null -eq $dependencies -or $null -eq $dependencies.PSObject.Properties['criteria']) {
-        throw 'The solution contentPackages resource has no dependency criteria to extend with Custom Detections.'
+    $dependenciesProperty = $contentPackages[0].properties.PSObject.Properties['dependencies']
+    if ($null -eq $dependenciesProperty) {
+        $contentPackages[0].properties | Add-Member -NotePropertyName dependencies -NotePropertyValue ([pscustomobject]@{
+            operator = 'AND'
+            criteria = @()
+        })
+        $dependencies = $contentPackages[0].properties.dependencies
+    }
+    else {
+        $dependencies = $dependenciesProperty.Value
+        if ($null -eq $dependencies -or $null -eq $dependencies.PSObject.Properties['criteria']) {
+            throw 'The solution contentPackages resource has no dependency criteria to extend with Custom Detections.'
+        }
     }
 
     $sentinelCriteria = @($dependencies.criteria | Where-Object {
@@ -559,14 +570,20 @@ function Add-XdrCustomDetectionsToSolution {
 
         $sourceId = [string]$detectionDocument.contentProvenance.source.id
         $detectionId = [string]$detectionDocument.properties.id
-        if ([string]::IsNullOrWhiteSpace($sourceId) -or [string]::IsNullOrWhiteSpace($detectionId)) {
-            throw "Custom Detection '$configuredPath' must contain contentProvenance.source.id and properties.id."
-        }
         $sentinelDerived = (
-            ($detectionDocument.contentProvenance.source.platform -ceq 'Microsoft Sentinel' -and
+            ($detectionDocument.contentProvenance.source.platform -in @('Microsoft Sentinel', 'Sentinel') -and
              $detectionDocument.contentProvenance.source.kind -ceq 'AnalyticsRule') -or
             $detectionDocument.contentProvenance.conversion.tool -ceq 'sentinel-to-xdr-migration'
         )
+        if ([string]::IsNullOrWhiteSpace($detectionId)) {
+            if ($sentinelDerived) {
+                throw "Custom Detection '$configuredPath' must contain contentProvenance.source.id and properties.id."
+            }
+            throw "Custom Detection '$configuredPath' must contain properties.id."
+        }
+        if ($sentinelDerived -and [string]::IsNullOrWhiteSpace($sourceId)) {
+            throw "Custom Detection '$configuredPath' must contain contentProvenance.source.id and properties.id."
+        }
         if ($sentinelDerived -and (
                 $sourceId -cnotmatch '\A[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\z' -or
                 [string]::IsNullOrWhiteSpace($detectionId))) {
@@ -616,13 +633,19 @@ function Add-XdrCustomDetectionsToSolution {
             Set-V31CustomDetectionTactics -DetectionResource $detectionResource -DetectionId $detectionId
         }
 
-        $variableName = $analyticRuleIndex[$sourceId]
-        $matches = @($Template.resources | Where-Object {
-            $_.properties.contentKind -eq 'AnalyticsRule' -and
-            $variableName -and ([string]$_.name).Contains("variables('$variableName')")
-        })
-        if ($matches.Count -ne 1) {
-            throw "Expected exactly one AnalyticsRule content template for Custom Detection source id '$sourceId'; found $($matches.Count)."
+        $analyticRuleTemplate = $null
+        if (-not [string]::IsNullOrWhiteSpace($sourceId)) {
+            $variableName = $analyticRuleIndex[$sourceId]
+            $matches = @($Template.resources | Where-Object {
+                $_.properties.contentKind -eq 'AnalyticsRule' -and
+                (($variableName -and ([string]$_.name).Contains("variables('$variableName')")) -or $_.properties.contentId -eq $sourceId)
+            })
+            if ($matches.Count -gt 1) {
+                throw "Expected at most one AnalyticsRule content template for Custom Detection source id '$sourceId'; found $($matches.Count)."
+            }
+            if ($matches.Count -eq 1) {
+                $analyticRuleTemplate = $matches[0]
+            }
         }
 
         $contentVersion = [string]$detectionDocument.version
@@ -632,6 +655,10 @@ function Add-XdrCustomDetectionsToSolution {
         elseif ($null -eq $detectionDocument.PSObject.Properties['version']) {
             # Retain old-document compatibility only outside the V3.1 entry point.
             $contentVersion = [string]$detectionDocument.contentProvenance.source.version
+            if ([string]::IsNullOrWhiteSpace($contentVersion) -and $null -ne $analyticRuleTemplate -and
+                -not [string]::IsNullOrWhiteSpace([string]$analyticRuleTemplate.properties.version)) {
+                $contentVersion = [string]$analyticRuleTemplate.properties.version
+            }
             if ([string]::IsNullOrWhiteSpace($contentVersion)) {
                 $contentVersion = $defaultContentVersion
             }
@@ -676,9 +703,9 @@ function Add-XdrCustomDetectionsToSolution {
             contentVersion = $contentVersion
         }) -Force
         $deploymentName = Get-CustomDetectionDeploymentName -SolutionName $SolutionName -DetectionId $detectionId
-        $Template.resources += New-CustomDetectionInstallDeployment -DeploymentName $deploymentName -DetectionResource $detectionResource -ExtensionVersion $extensionVersion
+        $installDeployment = New-CustomDetectionInstallDeployment -DeploymentName $deploymentName -DetectionResource $detectionResource -ExtensionVersion $extensionVersion
         $registration = New-CustomDetectionRegistration -DeploymentName $deploymentName -DetectionResource $detectionResource -DetectionDocument $detectionDocument -ContentVersion $contentVersion -ExtensionVersion $extensionVersion
-        $Template.resources += $registration
+        $Template.resources = @($Template.resources) + @($installDeployment, $registration)
         $dependencyCriteria += [pscustomobject]@{
             kind      = 'CustomDetection'
             contentId = [string]$registration.properties.contentId
