@@ -17,6 +17,23 @@ description: |
   Developers also configure legitimate hooks, so review the hook command and the settings.json writer before treating
   a result as malicious. This query complements "MCP client configuration written by an unexpected process" (MCP server
   config files) and "AI coding CLI launched with permission bypass by a package manager process".
+  False positives and exclusions:
+  - Developers configure legitimate SessionStart hooks (builds, linters, env setup). Review the hook command
+    (ProcessCommandLine) and the settings.json writer (ConfigWriter): an interactive editor or the developer's own
+    shell writing the config and running a recognizable in-repo command is expected activity.
+  - Editor settings are out of scope. VS Code user/workspace settings.json live under %APPDATA%\Code\User or a
+    project .vscode folder; Signal 1 is scoped to /.claude/ and /.gemini/, so routine editor saves do not match.
+  - Writes by the agent itself (claude/gemini, or node running claude-code/gemini-cli) are already excluded, so the
+    agent rewriting its own settings during normal use does not alert.
+  - Trusted package postinstall: an npm/yarn install can legitimately write a hook and spawn node/shells. This is the
+    supply-chain pattern the query targets, so tune per environment by excluding known internal registries or signed
+    publishers rather than the technique itself.
+  Timing heuristic limits:
+  - The 30s StartupWindow is a heuristic: a slow cold start can push the child past 30s (false negative, though a
+    correlated config write still surfaces it as Medium), and an unrelated shell spawned within 30s of startup can
+    set AtSessionStart (false positive). Timing alone yields Medium, never High.
+  - The 24h correlation joins on DeviceName only, so on a busy host a benign config write and an unrelated execution
+    can correlate coincidentally; ConfigWriter and ConfigPath are projected so an analyst can confirm the link.
   References:
   https://cloud.google.com/blog/topics/threat-intelligence/agentic-threat-activity-crosses-a-significant-threshold
   https://www.sonarsource.com/blog/mini-shai-hulud-targets-ai-coding-agents/
