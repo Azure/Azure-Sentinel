@@ -28,6 +28,19 @@ from solution_manager.qualification.readiness_support import (
     audit_private_config_and_support_export,
     discover_solution_qualification_inventory,
 )
+from solution_manager.qualification.runtime import (
+    collect_live_table_schema_readiness_evidence,
+)
+from solution_manager.qualification.table_schema_readiness import (
+    build_expected_custom_table_map,
+    discover_solution_tables,
+    evaluate_qual_tbl_01,
+    evaluate_qual_tbl_02,
+    evaluate_qual_tbl_03,
+    evaluate_val_tbl_01,
+    evaluate_val_tbl_02,
+    evaluate_val_tbl_03,
+)
 from solution_manager.qualification.workbook_playwright import (
     verify_workbook_playwright_rendering,
 )
@@ -115,6 +128,12 @@ def plan_qualification_pipeline(
     with using_run(root, effective_run_id):
         readiness = assess_qualification_readiness(root, run_id=effective_run_id)
         inventory = discover_solution_qualification_inventory(root, state=wf_state)
+        table_inventory = discover_solution_tables(root)
+        expected_custom_tables = build_expected_custom_table_map(table_inventory)
+        inventory["customLogTableNames"] = [rec.table_name for rec in expected_custom_tables.values()]
+        inventory["customLogTableCount"] = len(expected_custom_tables)
+        inventory["standardTableConfigNames"] = table_inventory.standard_table_config_names
+        inventory["standardTableConfigCount"] = len(table_inventory.standard_table_configs)
 
         counts = readiness["expectedContentCounts"]
         x = int(counts["sentinelRulesCount"])
@@ -421,6 +440,235 @@ def evaluate_qualification_promotion_gate(state: Mapping[str, Any]) -> dict[str,
     else:
         sanitized_evidence_ready = False
 
+    # 7. tableSchemaQualificationVerified (optional / applicable when custom-log tables exist)
+    raw_ts_qual = (
+        state.get("tableSchemaQualificationVerified")
+        if "tableSchemaQualificationVerified" in state
+        else gates_input.get("tableSchemaQualificationVerified")
+    )
+    ts_readiness = state.get("tableSchemaReadiness") if isinstance(state.get("tableSchemaReadiness"), Mapping) else {}
+    inv_block = (
+        state.get("inventory")
+        or (state.get("consolidatedPreflightPacket") or {}).get("inventory")
+        or {}
+    )
+    sol_dir_raw = (
+        state.get("solutionRoot")
+        or state.get("solutionDir")
+        or state.get("solutionPath")
+        or (inv_block.get("solutionRoot") if isinstance(inv_block, Mapping) else None)
+        or state.get("solution")
+    )
+    sol_dir_requested = isinstance(sol_dir_raw, (str, Path)) and bool(str(sol_dir_raw).strip())
+    sol_dir_found = False
+    table_inv = None
+    if sol_dir_requested:
+        raw_str = str(sol_dir_raw).strip()
+        cand_path = Path(raw_str)
+        if not cand_path.is_dir() and not cand_path.is_absolute():
+            repo_root = Path(__file__).resolve().parents[4]
+            rel_alt = repo_root / cand_path
+            if rel_alt.is_dir():
+                cand_path = rel_alt
+            elif "/" not in raw_str and "\\" not in raw_str:
+                sol_name_alt = repo_root / "Solutions" / raw_str
+                if sol_name_alt.is_dir():
+                    cand_path = sol_name_alt
+        if cand_path.is_dir():
+            sol_dir_found = True
+            table_inv = discover_solution_tables(cand_path)
+
+    discovered_custom_count = (
+        len(table_inv.custom_source_tables or table_inv.custom_packaged_tables) + len(table_inv.parse_errors)
+        if table_inv is not None
+        else 0
+    )
+    exp_counts = state.get("expectedContentCounts") if isinstance(state.get("expectedContentCounts"), Mapping) else {}
+    if not exp_counts and isinstance(inv_block, Mapping):
+        exp_counts = inv_block.get("expectedContentCounts") if isinstance(inv_block.get("expectedContentCounts"), Mapping) else {}
+    has_custom_tables = bool(
+        int(inv_block.get("customLogTableCount", 0) or 0) > 0
+        or int(inv_block.get("customTablesCount", 0) or 0) > 0
+        or int(exp_counts.get("customLogTableCount", 0) or 0) > 0
+        or int(exp_counts.get("customTablesCount", 0) or 0) > 0
+        or bool(inv_block.get("customLogTableNames"))
+        or int(ts_readiness.get("customTableCount", 0) or 0) > 0
+        or bool(ts_readiness.get("expectedCustomTables"))
+        or ts_readiness.get("applicable") is True
+        or discovered_custom_count > 0
+    )
+
+    def _has_verified_table_receipts(readiness_obj: Mapping[str, Any]) -> bool:
+        if not isinstance(readiness_obj, Mapping) or not readiness_obj:
+            return False
+        from .table_schema_readiness import (
+            _check_target_conflict,
+            _extract_parent_envelope_error,
+            _has_simulation_indicators_in_mapping,
+        )
+        readiness_dict = dict(readiness_obj)
+        if _has_simulation_indicators_in_mapping(readiness_dict):
+            return False
+        for cid in ("QUAL-TBL-01", "QUAL-TBL-02", "QUAL-TBL-03"):
+            if _extract_parent_envelope_error(readiness_dict, cid) is not None:
+                return False
+        if readiness_obj.get("status") != "passed" or readiness_obj.get("verified") is not True:
+            return False
+        static_val = readiness_obj.get("staticValidation")
+        if isinstance(static_val, Mapping) and static_val.get("passed") is False:
+            return False
+        receipt_target = readiness_obj.get("target")
+        if not isinstance(receipt_target, Mapping) or not receipt_target:
+            return False
+        state_target = state.get("target") or state.get("context")
+        if isinstance(state_target, Mapping) and state_target:
+            if _check_target_conflict(dict(state_target), dict(receipt_target), "QUAL-TBL") is not None:
+                return False
+
+        # Fail closed unless the solution directory was resolved on disk and custom tables were discovered from disk
+        if not sol_dir_found or table_inv is None:
+            return False
+
+        authoritative_inv = table_inv
+        expected_count = max(
+            int(inv_block.get("customLogTableCount", 0) or 0),
+            int(readiness_obj.get("customTableCount", 0) or 0),
+            1,
+        )
+        inv_custom_tables = authoritative_inv.custom_source_tables or authoritative_inv.custom_packaged_tables
+        if len(inv_custom_tables) < expected_count or authoritative_inv.parse_errors:
+            return False
+
+        # 1. ARM readback receipt must contain non-empty evaluated table entries with HTTP 2xx and ok=True
+        arm_sub = readiness_obj.get("armTableReadback") or readiness_obj.get("armTables")
+        if not isinstance(arm_sub, Mapping) or arm_sub.get("ok") is False:
+            return False
+        arm_entries: list[Mapping[str, Any]] = []
+        if isinstance(arm_sub.get("tables"), list):
+            arm_entries = [x for x in arm_sub["tables"] if isinstance(x, Mapping)]
+        elif isinstance(arm_sub.get("tables"), Mapping):
+            arm_entries = [x for x in arm_sub["tables"].values() if isinstance(x, Mapping)]
+        elif isinstance(arm_sub.get("tableName"), str):
+            arm_entries = [arm_sub]
+        if not arm_entries:
+            return False
+        for entry in arm_entries:
+            if entry.get("ok") is not True:
+                return False
+            sc = entry.get("statusCode", entry.get("httpStatus"))
+            if not isinstance(sc, int) or isinstance(sc, bool) or not (200 <= sc < 300):
+                return False
+            if not str(entry.get("endpoint") or entry.get("requestUrl") or "").strip():
+                return False
+            t_desc = str(entry.get("tableDescription") or entry.get("description") or "").strip()
+            if not t_desc:
+                return False
+            e_cols = entry.get("columns")
+            if not isinstance(e_cols, list) or not e_cols:
+                return False
+            for col in e_cols:
+                if not isinstance(col, Mapping) or not str(col.get("description") or "").strip():
+                    return False
+
+        # 2. Hunting schema receipt must be complete, HTTP 2xx, ok=True, and contain non-empty tables
+        hs_sub = (
+            readiness_obj.get("huntingSchema")
+            or readiness_obj.get("graphHuntingSchema")
+            or readiness_obj.get("huntingSchemaTables")
+        )
+        if not isinstance(hs_sub, Mapping) or hs_sub.get("ok") is not True:
+            return False
+        hs_sc = hs_sub.get("statusCode", hs_sub.get("httpStatus"))
+        if not isinstance(hs_sc, int) or isinstance(hs_sc, bool) or not (200 <= hs_sc < 300):
+            return False
+        hs_complete = hs_sub.get("paginationComplete") if "paginationComplete" in hs_sub else hs_sub.get("complete")
+        if hs_complete is not True:
+            return False
+        if not str(hs_sub.get("endpoint") or hs_sub.get("requestUrl") or "").strip():
+            return False
+        hs_tables = hs_sub.get("tables") if hs_sub.get("tables") is not None else hs_sub.get("value")
+        if not isinstance(hs_tables, (list, Mapping)) or len(hs_tables) == 0:
+            return False
+        hs_entries = (
+            [x for x in hs_tables if isinstance(x, Mapping)]
+            if isinstance(hs_tables, list)
+            else [x for x in hs_tables.values() if isinstance(x, Mapping)]
+        )
+        if not hs_entries:
+            return False
+        for h_entry in hs_entries:
+            if not str(h_entry.get("description") or h_entry.get("tableDescription") or "").strip():
+                return False
+            h_cols = h_entry.get("columns")
+            if not isinstance(h_cols, list) or not h_cols:
+                return False
+
+        # 3. Workspace hunting query receipt must have HTTP 2xx, ok=True, and non-empty query entries
+        hq_sub = (
+            readiness_obj.get("workspaceHuntingQuery")
+            or readiness_obj.get("graphRunHuntingQuery")
+            or readiness_obj.get("huntingQuery")
+        )
+        if not isinstance(hq_sub, Mapping) or hq_sub.get("ok") is not True:
+            return False
+        hq_entries: list[Mapping[str, Any]] = []
+        if isinstance(hq_sub.get("queries"), list):
+            hq_entries = [x for x in hq_sub["queries"] if isinstance(x, Mapping)]
+        elif isinstance(hq_sub.get("tables"), list):
+            hq_entries = [x for x in hq_sub["tables"] if isinstance(x, Mapping)]
+        elif isinstance(hq_sub.get("tables"), Mapping):
+            hq_entries = [x for x in hq_sub["tables"].values() if isinstance(x, Mapping)]
+        elif isinstance(hq_sub.get("schema"), list):
+            hq_entries = [hq_sub]
+        if not hq_entries:
+            return False
+        for q_entry in hq_entries:
+            if q_entry.get("ok") is not True:
+                return False
+            q_sc = q_entry.get("statusCode", q_entry.get("httpStatus"))
+            if not isinstance(q_sc, int) or isinstance(q_sc, bool) or not (200 <= q_sc < 300):
+                return False
+            if not str(q_entry.get("endpoint") or q_entry.get("requestUrl") or "").strip():
+                return False
+
+        # 4. Always run full VAL-TBL-01..03 and QUAL-TBL-01..03 evaluators against the authoritative table inventory
+        eff_target = dict(state_target) if isinstance(state_target, Mapping) and state_target else dict(receipt_target)
+        for v_fn in (evaluate_val_tbl_01, evaluate_val_tbl_02, evaluate_val_tbl_03):
+            v_status, _ = v_fn(authoritative_inv, enforce_blocking=True)
+            if v_status != "PASS":
+                return False
+        q1_s, _ = evaluate_qual_tbl_01(authoritative_inv, readiness_dict, target=eff_target, static_passed=True, enforce_blocking=True)
+        q2_s, _ = evaluate_qual_tbl_02(authoritative_inv, readiness_dict, target=eff_target, static_passed=True, enforce_blocking=True)
+        q3_s, _ = evaluate_qual_tbl_03(authoritative_inv, readiness_dict, target=eff_target, static_passed=True, enforce_blocking=True)
+        if not (q1_s == "PASS" and q2_s == "PASS" and q3_s == "PASS"):
+            return False
+
+        return True
+
+    if has_custom_tables:
+        if raw_ts_qual is False or raw_ts_qual == "not_applicable":
+            table_schema_qualification_verified: bool | str = False
+        else:
+            table_schema_qualification_verified = _has_verified_table_receipts(ts_readiness)
+    elif raw_ts_qual is False:
+        table_schema_qualification_verified = False
+    elif raw_ts_qual is True:
+        if sol_dir_requested and not sol_dir_found:
+            table_schema_qualification_verified = False
+        elif ts_readiness and ts_readiness.get("applicable") is False:
+            table_schema_qualification_verified = "not_applicable"
+        else:
+            table_schema_qualification_verified = _has_verified_table_receipts(ts_readiness)
+    elif ts_readiness:
+        if sol_dir_requested and not sol_dir_found:
+            table_schema_qualification_verified = False
+        elif ts_readiness.get("applicable") is False:
+            table_schema_qualification_verified = "not_applicable"
+        else:
+            table_schema_qualification_verified = _has_verified_table_receipts(ts_readiness)
+    else:
+        table_schema_qualification_verified = "not_applicable"
+
     blockers: list[str] = []
     missing_gates: list[str] = []
 
@@ -430,6 +678,11 @@ def evaluate_qualification_promotion_gate(state: Mapping[str, Any]) -> dict[str,
     if not deployment_verified:
         missing_gates.append("deploymentVerified")
         blockers.append("Disabled lab deployment and independent GET readback reconciliation are not verified.")
+    if table_schema_qualification_verified not in (True, "not_applicable"):
+        missing_gates.append("tableSchemaQualificationVerified")
+        blockers.append(
+            "Custom-log table schema readiness (VAL-TBL-01..03 and QUAL-TBL-01..03 live ARM + Graph AH schema/query evidence) is not verified."
+        )
     if not mock_ingestion_verified:
         missing_gates.append("mockIngestionVerified")
         blockers.append("Synthetic DCR mock ingestion and landing query verification are not complete.")
@@ -450,6 +703,7 @@ def evaluate_qualification_promotion_gate(state: Mapping[str, Any]) -> dict[str,
     gates = {
         "preflightPassed": preflight_passed,
         "deploymentVerified": deployment_verified,
+        "tableSchemaQualificationVerified": table_schema_qualification_verified,
         "mockIngestionVerified": mock_ingestion_verified,
         "ruleParityVerified": rule_parity_verified,
         "workbookQualificationVerified": workbook_qualification_verified,
@@ -461,6 +715,7 @@ def evaluate_qualification_promotion_gate(state: Mapping[str, Any]) -> dict[str,
         "promoted": passed,
         "preflightPassed": preflight_passed,
         "deploymentVerified": deployment_verified,
+        "tableSchemaQualificationVerified": table_schema_qualification_verified,
         "mockIngestionVerified": mock_ingestion_verified,
         "ruleParityVerified": rule_parity_verified,
         "workbookQualificationVerified": workbook_qualification_verified,
@@ -492,6 +747,7 @@ class QualificationOrchestrator:
         parity_evaluator: Callable[[dict[str, Any], Mapping[str, Any] | None, Mapping[str, Any] | None], dict[str, Any]] | None = None,
         workbook_query_runner: Callable[[str, Mapping[str, Any] | None], dict[str, Any]] | None = None,
         playwright_runner: Callable[[str, Mapping[str, Any] | None], dict[str, Any]] | None = None,
+        table_schema_verifier: Callable[[Path, dict[str, Any]], dict[str, Any]] | None = None,
         enable_playwright: bool = True,
     ) -> None:
         self.solution_root = Path(solution_path).expanduser().resolve()
@@ -515,6 +771,7 @@ class QualificationOrchestrator:
         self.parity_evaluator = parity_evaluator
         self.workbook_query_runner = workbook_query_runner
         self.playwright_runner = playwright_runner
+        self.table_schema_verifier = table_schema_verifier
         self.enable_playwright = enable_playwright
 
         with using_run(self.solution_root, self.run_id):
@@ -806,21 +1063,50 @@ class QualificationOrchestrator:
         reasons.extend(dep_reasons)
         reasons.extend(ing_reasons)
 
-        passed = rq_ok and dep_ok and ing_ok
+        # Static custom-log table schema readiness check (VAL-TBL-01..03)
+        table_inv = discover_solution_tables(self.solution_root)
+        expected_custom_map = build_expected_custom_table_map(table_inv)
+        v1_status, v1_detail = evaluate_val_tbl_01(table_inv, enforce_blocking=True)
+        v2_status, v2_detail = evaluate_val_tbl_02(table_inv, enforce_blocking=True)
+        v3_status, v3_detail = evaluate_val_tbl_03(table_inv, enforce_blocking=True)
+        has_custom_tables = bool(expected_custom_map or table_inv.parse_errors)
+        tbl_static_ok = True
+        if has_custom_tables:
+            for chk_id, chk_st, chk_dt in (
+                ("VAL-TBL-01", v1_status, v1_detail),
+                ("VAL-TBL-02", v2_status, v2_detail),
+                ("VAL-TBL-03", v3_status, v3_detail),
+            ):
+                if chk_st != "PASS":
+                    tbl_static_ok = False
+                    reasons.append(f"{chk_id} failed: {chk_dt}")
+
+        passed = rq_ok and dep_ok and ing_ok and tbl_static_ok
         stage.update(
             {
-                "status": "passed" if passed else "blocked",
+                "status": "passed" if passed else ("failed" if not tbl_static_ok else "blocked"),
                 "completedAt": _now_iso(),
                 "armWhatIfSupportedForXdrExtensions": False,
                 "runtimeQueryConsentVerified": rq_ok,
                 "deploymentPreapprovalVerified": dep_ok,
                 "mockIngestionPreapprovalVerified": ing_ok,
+                "tableSchemaStaticValidationVerified": tbl_static_ok if has_custom_tables else "not_applicable",
+                "tableSchemaStaticValidation": {
+                    "applicable": has_custom_tables,
+                    "customTableCount": len(expected_custom_map),
+                    "standardTableConfigCount": len(table_inv.standard_table_configs),
+                    "VAL-TBL-01": {"status": v1_status, "detail": v1_detail},
+                    "VAL-TBL-02": {"status": v2_status, "detail": v2_detail},
+                    "VAL-TBL-03": {"status": v3_status, "detail": v3_detail},
+                },
                 "expectedContentCounts": self.plan["expectedContentCounts"],
                 "deploymentScopeSummary": self.plan["deploymentScopeSummary"],
                 "reasons": reasons,
             }
         )
         self.state["preflightPassed"] = passed
+        if not has_custom_tables:
+            self.state["tableSchemaQualificationVerified"] = "not_applicable"
         return self._persist_state(self.state)
 
     def run_deployment(self) -> dict[str, Any]:
@@ -902,10 +1188,83 @@ class QualificationOrchestrator:
             and readback_result.get("readbackVerified", True) is True
             and readback_result.get("httpMethod", "GET") == "GET"
         )
+
+        # Live custom-log table schema verification (QUAL-TBL-01..03)
+        table_inv = discover_solution_tables(self.solution_root)
+        expected_custom_map = build_expected_custom_table_map(table_inv)
+        has_custom_tables = bool(expected_custom_map or table_inv.parse_errors)
+        table_schema_ok = True
+        table_schema_evidence: dict[str, Any] | None = None
+
+        if has_custom_tables:
+            v1_s, _ = evaluate_val_tbl_01(table_inv, enforce_blocking=True)
+            v2_s, _ = evaluate_val_tbl_02(table_inv, enforce_blocking=True)
+            v3_s, _ = evaluate_val_tbl_03(table_inv, enforce_blocking=True)
+            static_ok = v1_s == "PASS" and v2_s == "PASS" and v3_s == "PASS"
+            eff_target_for_tbl = {
+                "workspaceResourceId": self.plan["target"].get("workspaceResourceId"),
+                "workspaceId": self.plan["target"].get("workspaceCustomerId") or self.plan["target"].get("workspaceId"),
+            }
+
+            if self.table_schema_verifier is not None:
+                raw_ts = dict(self.table_schema_verifier(self.solution_root, dict(self.plan["target"])))
+            elif isinstance(readback_result.get("tableSchemaReadiness"), Mapping):
+                raw_ts = dict(readback_result["tableSchemaReadiness"])
+            elif isinstance(deploy_result.get("tableSchemaReadiness"), Mapping):
+                raw_ts = dict(deploy_result["tableSchemaReadiness"])
+            else:
+                raw_ts = collect_live_table_schema_readiness_evidence(
+                    self.solution_root,
+                    workspace_resource_id=str(eff_target_for_tbl["workspaceResourceId"] or ""),
+                    workspace_id=str(eff_target_for_tbl["workspaceId"] or ""),
+                    tenant_id=str(self.plan["target"].get("tenantId") or ""),
+                )
+
+            q1_st, q1_dt = evaluate_qual_tbl_01(
+                table_inv,
+                raw_ts,
+                target=eff_target_for_tbl,
+                static_passed=static_ok,
+                enforce_blocking=True,
+            )
+            q2_st, q2_dt = evaluate_qual_tbl_02(
+                table_inv,
+                raw_ts,
+                target=eff_target_for_tbl,
+                static_passed=static_ok,
+                enforce_blocking=True,
+            )
+            q3_st, q3_dt = evaluate_qual_tbl_03(
+                table_inv,
+                raw_ts,
+                target=eff_target_for_tbl,
+                static_passed=static_ok,
+                enforce_blocking=True,
+            )
+            from .table_schema_readiness import _has_simulation_indicators_in_mapping
+            table_schema_ok = bool(
+                static_ok
+                and q1_st == "PASS"
+                and q2_st == "PASS"
+                and q3_st == "PASS"
+                and not _has_simulation_indicators_in_mapping(raw_ts)
+            )
+            raw_ts["applicable"] = True
+            raw_ts["verified"] = table_schema_ok
+            raw_ts["status"] = "passed" if table_schema_ok else "failed"
+            raw_ts["checks"] = {
+                **(raw_ts.get("checks") if isinstance(raw_ts.get("checks"), Mapping) else {}),
+                "QUAL-TBL-01": {"status": q1_st, "detail": q1_dt},
+                "QUAL-TBL-02": {"status": q2_st, "detail": q2_dt},
+                "QUAL-TBL-03": {"status": q3_st, "detail": q3_dt},
+            }
+            table_schema_evidence = raw_ts
+
         deploy_ok = bool(
             deploy_result.get("status") in {"succeeded", "passed", "arm-accepted-contract-pending"}
             and disabled_ok
             and readback_ok
+            and table_schema_ok
         )
 
         reasons: list[str] = []
@@ -913,6 +1272,11 @@ class QualificationOrchestrator:
             reasons.append("Deployed resources must remain disabled (enabled: False) in lab qualification.")
         if not readback_ok:
             reasons.append("Independent GET readback reconciliation failed or was not verified.")
+        if has_custom_tables and not table_schema_ok and table_schema_evidence is not None:
+            for q_id in ("QUAL-TBL-01", "QUAL-TBL-02", "QUAL-TBL-03"):
+                q_entry = (table_schema_evidence.get("checks") or {}).get(q_id) or {}
+                if q_entry.get("status") != "PASS":
+                    reasons.append(f"{q_id} failed: {q_entry.get('detail')}")
         if not deploy_ok and not reasons:
             reasons.append(str(deploy_result.get("error") or "Deployment execution failed."))
 
@@ -925,11 +1289,16 @@ class QualificationOrchestrator:
                 "initialDisabled": disabled_ok,
                 "allResourcesDisabled": disabled_ok,
                 "readbackReconciliation": readback_result,
+                "tableSchemaQualificationVerified": table_schema_ok if has_custom_tables else "not_applicable",
+                "tableSchemaReadiness": table_schema_evidence,
                 "deploymentVerified": deploy_ok,
                 "reasons": reasons,
             }
         )
         self.state["deploymentVerified"] = deploy_ok
+        self.state["tableSchemaQualificationVerified"] = table_schema_ok if has_custom_tables else "not_applicable"
+        if table_schema_evidence is not None:
+            self.state["tableSchemaReadiness"] = table_schema_evidence
         return self._persist_state(self.state)
 
     def run_mock_ingestion(self) -> dict[str, Any]:
@@ -1373,6 +1742,7 @@ def run_qualification_pipeline(
     parity_evaluator: Callable[[dict[str, Any], Mapping[str, Any] | None, Mapping[str, Any] | None], dict[str, Any]] | None = None,
     workbook_query_runner: Callable[[str, Mapping[str, Any] | None], dict[str, Any]] | None = None,
     playwright_runner: Callable[[str, Mapping[str, Any] | None], dict[str, Any]] | None = None,
+    table_schema_verifier: Callable[[Path, dict[str, Any]], dict[str, Any]] | None = None,
     enable_playwright: bool = True,
     stages: Iterable[str] | None = None,
     up_to_stage: str | None = None,
@@ -1395,6 +1765,7 @@ def run_qualification_pipeline(
         parity_evaluator=parity_evaluator,
         workbook_query_runner=workbook_query_runner,
         playwright_runner=playwright_runner,
+        table_schema_verifier=table_schema_verifier,
         enable_playwright=enable_playwright,
     )
     return orchestrator.run(stages=stages, up_to_stage=up_to_stage, resume=resume)

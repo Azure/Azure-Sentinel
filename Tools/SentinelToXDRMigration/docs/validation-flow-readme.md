@@ -107,15 +107,24 @@ sentinel-xdr-migration workbook-publication-clean `
   --run-id "<run-id>"
 ```
 
-### Step 4 — Structural & Offline Content Validation (`VAL-RULE-01`, `VAL-WB-01`, `VAL-PARSER-01`, `VAL-DC-01`)
+### Step 4 — Structural, Offline Content & Custom Table Schema Validation (`VAL-RULE-01`, `VAL-WB-01`, `VAL-PARSER-01`, `VAL-DC-01`, `VAL-TBL-01..03`)
 
-Run structural validation on the solution content and generated XDR artifacts:
+Run structural validation on the solution content, custom-log table schemas, and generated XDR artifacts:
 
 ```powershell
 sentinel-xdr-migration validate `
   --solution "Solutions/<SolutionName>" `
   --run-id "<run-id>"
 ```
+
+#### Required Custom-Log Table & Column Descriptions (`VAL-TBL-01..03`)
+
+For every authored custom-log `Microsoft.OperationalInsights/workspaces/tables` declaration (whether in a standalone connector JSON, `resources[]`, nested deployment, or `Package/mainTemplate.json`), Validation and PR CI enforce three **blocking** acceptance gates (not advisory):
+- **`VAL-TBL-01` (Table description):** `properties.schema.description` must be present, non-empty, not whitespace-only, not a placeholder (`TODO`, `TBD`, `N/A`, `none`, `description`, `table`, etc.), not an unresolved ARM expression (`[parameters(...)]`, `[variables(...)]`), and must not merely repeat the table name.
+- **`VAL-TBL-02` (100% custom column descriptions):** Every declared custom column in `properties.schema.columns[]` (or `properties.columns[]`) must define a non-empty, non-whitespace, non-placeholder `description` that does not merely repeat the column name and is not an unresolved ARM expression. Standard Log Analytics system columns (`TimeGenerated`, `TenantId`, `Type`, `_ResourceId`, etc.) are exempt only when not explicitly declared in `columns[]`.
+- **`VAL-TBL-03` (Package preservation without drift):** Every source custom-log table and all its table/column descriptions must survive packaging into `Package/mainTemplate.json` with identical whitespace-normalized text, zero dropped tables/columns, zero cross-file source conflicts, and no unresolved ARM expressions.
+- **Microsoft-standard table configuration vs. authored custom-log schemas:** `Microsoft.OperationalInsights/workspaces/tables` resources that only configure retention or table plan on Microsoft-standard tables (only `plan`, `retentionInDays`, `totalRetentionInDays`, `archiveRetentionInDays`, or `analyticsTier`, with no `columns`, no `schema.columns`, no `schema.description`, and no `_CL` suffix) are classified as `microsoft_standard_config` and are automatically exempt (`NOT_APPLICABLE` when a solution has no custom-log tables).
+- **Consistent enforcement across local validation and PR CI:** The exact same rules are enforced in `.script/dataConnectorValidator.ts` (PR CI `Data Connector Validation`), `.script/SolutionValidations/solutionValidator.ts` (PR CI `Solution Validation`), `.script/local-validation/validate.ts`, `.script/local-validation/validate-xdr-content.py --family tables`, and `sentinel-xdr-migration pr-qualify --mode validation`.
 
 For offline Authoring without live query execution, complete the workflow validation stage in `offline-authoring` mode (`runtimeStatus=not-run`), which discloses in the report that live KQL queries were not executed against a workspace/tenant.
 
@@ -230,3 +239,36 @@ sentinel-xdr-migration pr-qualify `
 | :--- | :--- |
 | **`Validated`** | All applicable checks in `validation-checks.md` (plus static `migration-checks.md` checks if active) are `PASS`, with 100% packaged inventory and zero waivers/exclusions. |
 | **`Partially Validated`** | All non-waivable safety gates pass, zero unresolved `FAIL`/`SKIPPED`/`BLOCKED` checks remain, and $\ge 1$ check is `WAIVED_WITH_AUTHOR_EVIDENCE` or has an acknowledged inventory exclusion in `E2E-V01`. |
+
+---
+
+## 5. Running & Troubleshooting Custom Table Schema Checks (`VAL-TBL-01..03`)
+
+### Commands to Run Locally and in CI
+
+```powershell
+# 1. Run Python table schema readiness check via validate-xdr-content.py
+python .script/local-validation/validate-xdr-content.py `
+  --toolkit-root "." `
+  --content-root "." `
+  --solution-path "Solutions/<SolutionName>" `
+  --family tables
+
+# 2. Run PR qualification check runner in validation mode
+sentinel-xdr-migration pr-qualify `
+  --solution "Solutions/<SolutionName>" `
+  --mode validation
+
+# 3. Run TypeScript local validator (covers Data Connectors + Package/mainTemplate.json)
+npx ts-node .script/local-validation/validate.ts --path "Solutions/<SolutionName>"
+```
+
+### Common Failure Reasons and Remediation
+
+| Check | Failure Code / Message | Cause & Fix |
+| :--- | :--- | :--- |
+| `VAL-TBL-01` | `missing_table_description` / `placeholder_table_description` / `table_description_repeats_name` | Add a meaningful `properties.schema.description` explaining the telemetry stored in the custom table. |
+| `VAL-TBL-01` / `VAL-TBL-02` / `VAL-TBL-03` | `unresolved_schema_expression` | `schema.description` or a column `description` uses an unresolved `[parameters(...)]` or `[variables(...)]` expression without a static `defaultValue` or literal string. Replace with a literal description or define a non-empty string `defaultValue` on the parameter. |
+| `VAL-TBL-02` | `missing_column_description` / `placeholder_column_description` / `column_description_repeats_name` | Add a meaningful `description` to every custom column listed in the failure output. |
+| `VAL-TBL-03` | `table_missing_in_package` / `table_description_mismatch_in_package` / `column_descriptions_mismatch_in_package` | Re-run `sentinel-xdr-migration package-v3-1` so `Package/mainTemplate.json` matches the updated source table JSON files, and remove any conflicting duplicate source table files. |
+

@@ -5,6 +5,7 @@ import { isValidSchema } from "./utils/jsonSchemaChecker.js";
 import { isValidId } from "./utils/dataConnectorCheckers/idChecker.js";
 import { isValidDataType } from "./utils/dataConnectorCheckers/dataTypeChecker.js";
 import { isValidPermissions } from "./utils/dataConnectorCheckers/permissionsChecker.js";
+import { isValidCustomTableSchemas } from "./utils/dataConnectorCheckers/customTableSchemaChecker.js";
 import * as logger from "./utils/logger.js";
 import { ConnectorCategory } from "./utils/dataConnector.js";
 
@@ -13,6 +14,7 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
   if(!filePath.includes('Templates'))
   {
     let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    const tableCheck = isValidCustomTableSchemas(filePath, jsonFile);
 
     if(isPotentialConnectorJson(jsonFile))
     {
@@ -42,7 +44,7 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
         console.warn(`Skipping File as it is of type Events : ${filePath}`)
       }
     }
-    else{
+    else if (!tableCheck.hasAnyTables) {
       console.warn(`Could not identify json file as a connector. Skipping File path: ${filePath}`)
     }
   }

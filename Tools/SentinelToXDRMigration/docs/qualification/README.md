@@ -195,7 +195,7 @@ documents or private evidence as part of a public solution package.
 | Source section | Definitions covering the section |
 |---|---|
 | GET-STARTED | Setup references only; current authorization and execution procedures take precedence |
-| Data Connectors, rows 3-42 | `VAL-DC-01`, `VAL-DC-02`, `VAL-URL-01`, `QUAL-DC-01`, `QUAL-TEXT-01`, `QUAL-RELEASE-01` |
+| Data Connectors, rows 3-42 | `VAL-DC-01`, `VAL-DC-02`, `VAL-TBL-01..03`, `VAL-URL-01`, `QUAL-DC-01`, `QUAL-TBL-01..03`, `QUAL-TEXT-01`, `QUAL-RELEASE-01` |
 | Sample data, rows 3-7 | `VAL-SAMPLE-01`, `E2E-V02`, `E2E-V03`, `QUAL-MOCK-01`, `TK-G07` |
 | Logo, rows 3-14 | `VAL-LOGO-01`, `E2E-Q06` |
 | Parsers, rows 3-9 | `VAL-PARSER-01`, `QUAL-PARSER-01`, `QUAL-TI-01`, `VAL-URL-01` |
@@ -237,6 +237,19 @@ and `TK-G14` by `VAL-OPS-01`; `TK-G12` by migration `TK-Q03`.
   and ARM schema version. Record the exact field being compared.
 - Visual quality, detection usefulness, owner permissions and MSTIC/Connector
   team sign-off remain human responsibilities where evidence is not sufficient.
+
+## Per-Check Manual Review Substitution by Qualification Evidence
+
+Where current, inspectable qualification evidence (`qualification-evidence.json` bound to the PR head SHA and locked non-production target) proves the exact same specific check that a human reviewer would otherwise repeat manually, that specific manual check sub-criterion may be marked satisfied by the qualification evidence (`SUBSTITUTABLE_MANUAL_CHECK_MAP` in `solution_manager/qualification/pr_check_runner.py`).
+
+- **Per-check substitution only (not a blanket waiver):** Satisfying an automated qualification check substitutes only the mapped duplicate manual check sub-criterion; it never waives human semantic review (`QUAL-RULE-01`, `QUAL-TEXT-01`, `QUAL-NOTEBOOK-01`, `QUAL-RELEASE-01`) or required code-owner/PR approvals.
+- **Existing manual checks remain active until evidence is present:** Until current, inspectable `PASS` evidence exists for all required automated checks in the mapping, the manual check remains `PENDING_HUMAN_REVIEW`.
+
+| Manual / Composite Review Check | Substituted Sub-Criterion | Required `PASS` Qualification Checks |
+|---|---|---|
+| `QUAL-DC-01` (Data Connector Operational Qualification) | Custom-log table and column schema description persistence and Defender XDR Advanced Hunting schema/query exposure | `VAL-TBL-01`, `VAL-TBL-02`, `VAL-TBL-03`, `QUAL-TBL-01`, `QUAL-TBL-02`, `QUAL-TBL-03` |
+| `QUAL-TEXT-01` (Content Explanation and Presentation Review) | Custom-log table (`properties.schema.description`) and column (`properties.schema.columns[].description`) description presence, meaningfulness, and live exposure (human review of connector prose, branding, and workbook charts remains required) | `VAL-TBL-01`, `VAL-TBL-02`, `VAL-TBL-03`, `QUAL-TBL-01`, `QUAL-TBL-02` |
+| `E2E-Q01` (Live Solution Package Deployment) | Custom-log table ARM readback and Advanced Hunting workspace-scoped queryability after deployment | `QUAL-TBL-01`, `QUAL-TBL-02`, `QUAL-TBL-03` |
 
 ## NPF operating principles
 

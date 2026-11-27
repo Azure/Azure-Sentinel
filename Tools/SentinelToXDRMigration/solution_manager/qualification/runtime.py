@@ -7,7 +7,9 @@ import re
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+import uuid
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -51,6 +53,11 @@ from solution_manager.migration.source_runtime_waiver import SOURCE_PROVIDERS
 from solution_manager.core.target_context import require_locked_target
 
 ADVANCED_HUNTING_ENDPOINT = "https://graph.microsoft.com/v1.0/security/runHuntingQuery"
+GRAPH_BETA_HUNTING_SCHEMA_ENDPOINT = "https://graph.microsoft.com/beta/security/getHuntingSchema"
+GRAPH_BETA_HUNTING_SCHEMA_TABLES_ENDPOINT = "https://graph.microsoft.com/beta/security/getHuntingSchemaTables"
+GRAPH_BETA_RUN_HUNTING_QUERY_ENDPOINT = "https://graph.microsoft.com/beta/security/getRunHuntingQuery"
+ARM_TABLES_DEFAULT_API_VERSION = "2025-02-01"
+ARM_TABLES_FALLBACK_API_VERSION = "2022-10-01"
 MAX_GRAPH_IN_FLIGHT_REQUESTS = 5
 MAX_ADVANCED_HUNTING_WORKERS = 3
 ADVANCED_HUNTING_MIN_INTERVAL_SECONDS = 1.5
@@ -1182,6 +1189,740 @@ def run_advanced_hunting_query(
         "error": "Advanced Hunting retry budget expired before a request could complete",
         "errorDetails": "The five-minute request and retry budget was exhausted",
         "failureKind": "provider",
+    }
+
+
+_WORKSPACE_ARM_ID_RE = re.compile(
+    r"^/subscriptions/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    r"/resourceGroups/[^/?#\\]+/providers/Microsoft\.OperationalInsights/workspaces/[^/?#\\]+$",
+    re.IGNORECASE,
+)
+_ARM_API_VERSION_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:-[a-zA-Z0-9]+)?$")
+_SENSITIVE_ERROR_PATTERNS = (
+    re.compile(r"(?i)bearer\s+[a-z0-9\-._~+/]+=*"),
+    re.compile(r"\beyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\b"),
+    re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"),
+)
+
+
+def _redact_text(text: str) -> str:
+    """Redact tokens, JWTs, and email addresses from diagnostic error strings."""
+    cleaned = str(text or "")
+    for pattern in _SENSITIVE_ERROR_PATTERNS:
+        cleaned = pattern.sub("[REDACTED]", cleaned)
+    return cleaned
+
+
+def _validate_workspace_guid(workspace_id: str) -> str:
+    """Validate and normalize an OData Edm.Guid workspace ID."""
+    cleaned = str(workspace_id).strip().strip("'").strip('"')
+    try:
+        parsed = uuid.UUID(cleaned)
+    except ValueError as exc:
+        raise ValueError(f"Invalid workspace_id Edm.Guid: {workspace_id!r}") from exc
+    return str(parsed)
+
+
+def _is_trusted_graph_next_link(url: str) -> bool:
+    """Ensure @odata.nextLink points strictly to https://graph.microsoft.com."""
+    try:
+        parts = urllib.parse.urlsplit(url)
+    except Exception:
+        return False
+    if parts.scheme.lower() != "https" or parts.netloc.lower() != "graph.microsoft.com":
+        return False
+    return parts.path.startswith("/beta/security/") or parts.path.startswith("/v1.0/security/")
+
+
+def _escape_odata_string_literal_and_encode(value: str) -> str:
+    """Escape a string literal for an OData function parameter and percent-encode with %20."""
+    doubled_quotes = (value or "").replace("'", "''")
+    return urllib.parse.quote(doubled_quotes, safe="")
+
+
+def build_graph_hunting_schema_tables_url(workspace_id: str | None = None) -> str:
+    """Build Graph beta URL for getHuntingSchemaTables or getHuntingSchemaTables(workspaceId=<guid>).
+
+    Note: ``workspaceId`` is an OData ``Edm.Guid`` and MUST be passed unquoted.
+    """
+    if not workspace_id or not str(workspace_id).strip():
+        return GRAPH_BETA_HUNTING_SCHEMA_TABLES_ENDPOINT
+    cleaned_guid = _validate_workspace_guid(workspace_id)
+    return f"{GRAPH_BETA_HUNTING_SCHEMA_TABLES_ENDPOINT}(workspaceId={cleaned_guid})"
+
+
+def build_graph_run_hunting_query_url(
+    query: str,
+    *,
+    timespan: str = "P1D",
+    workspace_id: str | None = None,
+) -> str:
+    """Build Graph beta URL for getRunHuntingQuery(query='...',timespan='...',workspaceId=<guid>).
+
+    Doubles single quotes inside ``query`` and ``timespan`` for OData string literals,
+    percent-encodes spaces as ``%20``, and passes ``workspaceId`` unquoted as ``Edm.Guid``.
+    """
+    encoded_q = _escape_odata_string_literal_and_encode(query)
+    encoded_ts = _escape_odata_string_literal_and_encode(timespan or "P1D")
+    if workspace_id and str(workspace_id).strip():
+        cleaned_guid = _validate_workspace_guid(workspace_id)
+        return (
+            f"{GRAPH_BETA_RUN_HUNTING_QUERY_ENDPOINT}"
+            f"(query='{encoded_q}',timespan='{encoded_ts}',workspaceId={cleaned_guid})"
+        )
+    return f"{GRAPH_BETA_RUN_HUNTING_QUERY_ENDPOINT}(query='{encoded_q}',timespan='{encoded_ts}')"
+
+
+def fetch_graph_hunting_schema(
+    token: str,
+    *,
+    timeout: int = 60,
+) -> dict[str, Any]:
+    """Call GET https://graph.microsoft.com/beta/security/getHuntingSchema."""
+    request = urllib.request.Request(
+        GRAPH_BETA_HUNTING_SCHEMA_ENDPOINT,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+        },
+        method="GET",
+    )
+    _GRAPH_REQUEST_SEMAPHORE.acquire()
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            status_code = getattr(response, "status", None) or response.getcode()
+            body = json.loads(response.read().decode("utf-8", errors="replace"))
+        tables = body.get("tables") if isinstance(body, dict) else None
+        if not isinstance(tables, list):
+            tables = body.get("value", []) if isinstance(body, dict) else []
+        return {
+            "ok": True,
+            "statusCode": status_code,
+            "endpoint": GRAPH_BETA_HUNTING_SCHEMA_ENDPOINT,
+            "tables": tables if isinstance(tables, list) else [],
+            "error": None,
+        }
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        return {
+            "ok": False,
+            "statusCode": exc.code,
+            "endpoint": GRAPH_BETA_HUNTING_SCHEMA_ENDPOINT,
+            "tables": [],
+            "error": _redact_text(raw[:300]),
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "statusCode": 0,
+            "endpoint": GRAPH_BETA_HUNTING_SCHEMA_ENDPOINT,
+            "tables": [],
+            "error": _redact_text(str(exc)[:300]),
+        }
+    finally:
+        _GRAPH_REQUEST_SEMAPHORE.release()
+
+
+def fetch_graph_hunting_schema_tables(
+    token: str,
+    *,
+    workspace_id: str | None = None,
+    timeout: int = 60,
+    max_pages: int = 10,
+) -> dict[str, Any]:
+    """Call GET https://graph.microsoft.com/beta/security/getHuntingSchemaTables(workspaceId=<guid>).
+
+    Follows ``@odata.nextLink`` up to ``max_pages`` and returns all discovered table schema objects.
+    """
+    initial_url = build_graph_hunting_schema_tables_url(workspace_id)
+    cleaned_ws = str(workspace_id or "").strip().strip("'").strip('"').strip("{}")
+    ws_unquoted = bool(
+        cleaned_ws
+        and f"workspaceId={cleaned_ws}" in initial_url
+        and f"workspaceId='{cleaned_ws}'" not in initial_url
+    )
+    next_url: str | None = initial_url
+    tables: list[dict[str, Any]] = []
+    pages_fetched = 0
+    last_status = 0
+
+    while next_url and pages_fetched < max_pages:
+        pages_fetched += 1
+        request = urllib.request.Request(
+            next_url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json",
+            },
+            method="GET",
+        )
+        _GRAPH_REQUEST_SEMAPHORE.acquire()
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                last_status = getattr(response, "status", None) or response.getcode()
+                body = json.loads(response.read().decode("utf-8", errors="replace"))
+        except urllib.error.HTTPError as exc:
+            raw = exc.read().decode("utf-8", errors="replace")
+            return {
+                "ok": False,
+                "statusCode": exc.code,
+                "endpoint": initial_url,
+                "workspaceId": workspace_id,
+                "workspaceIdUnquoted": ws_unquoted,
+                "tables": tables,
+                "pagesFetched": pages_fetched,
+                "complete": False,
+                "hasUnfetchedPages": True,
+                "error": _redact_text(raw[:300]),
+            }
+        except Exception as exc:
+            return {
+                "ok": False,
+                "statusCode": 0,
+                "endpoint": initial_url,
+                "workspaceId": workspace_id,
+                "workspaceIdUnquoted": ws_unquoted,
+                "tables": tables,
+                "pagesFetched": pages_fetched,
+                "complete": False,
+                "hasUnfetchedPages": True,
+                "error": _redact_text(str(exc)[:300]),
+            }
+        finally:
+            _GRAPH_REQUEST_SEMAPHORE.release()
+
+        if isinstance(body, dict):
+            page_items = body.get("value")
+            if not isinstance(page_items, list):
+                page_items = body.get("tables", [])
+            if isinstance(page_items, list):
+                tables.extend(item for item in page_items if isinstance(item, dict))
+            next_link = body.get("@odata.nextLink")
+            candidate_next = str(next_link).strip() if isinstance(next_link, str) and next_link.strip() else None
+            if candidate_next and not _is_trusted_graph_next_link(candidate_next):
+                return {
+                    "ok": False,
+                    "statusCode": last_status or 0,
+                    "endpoint": initial_url,
+                    "workspaceId": workspace_id,
+                    "workspaceIdUnquoted": ws_unquoted,
+                    "tables": tables,
+                    "pagesFetched": pages_fetched,
+                    "complete": False,
+                    "hasUnfetchedPages": True,
+                    "error": "Untrusted @odata.nextLink host or path rejected",
+                }
+            next_url = candidate_next
+        else:
+            next_url = None
+
+    has_unfetched = next_url is not None
+    return {
+        "ok": not has_unfetched,
+        "statusCode": last_status or 200,
+        "endpoint": initial_url,
+        "workspaceId": workspace_id,
+        "workspaceIdUnquoted": ws_unquoted,
+        "tables": tables,
+        "pagesFetched": pages_fetched,
+        "complete": not has_unfetched,
+        "paginationComplete": not has_unfetched,
+        "hasUnfetchedPages": has_unfetched,
+        "error": (
+            f"Incomplete pagination: stopped after {pages_fetched} page(s) with @odata.nextLink still present"
+            if has_unfetched
+            else None
+        ),
+    }
+
+
+def run_workspace_hunting_query_get(
+    query: str,
+    token: str,
+    *,
+    workspace_id: str | None = None,
+    timespan: str = "P1D",
+    timeout: int = 60,
+) -> dict[str, Any]:
+    """Execute a workspace-scoped Advanced Hunting KQL query via Graph beta GET getRunHuntingQuery."""
+    url = build_graph_run_hunting_query_url(query, timespan=timespan, workspace_id=workspace_id)
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+        },
+        method="GET",
+    )
+    _GRAPH_REQUEST_SEMAPHORE.acquire()
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            status_code = getattr(response, "status", None) or response.getcode()
+            body = json.loads(response.read().decode("utf-8", errors="replace"))
+        response_error = _hunting_query_response_error(body) if isinstance(body, dict) else "Invalid response"
+        if response_error:
+            return {
+                "ok": False,
+                "statusCode": status_code,
+                "endpoint": url,
+                "workspaceId": workspace_id,
+                "rowCount": 0,
+                "schema": [],
+                "error": _redact_text(str(response_error)[:300]),
+            }
+        rows = body.get("results", body.get("Results")) or []
+        schema = body.get("schema", body.get("Schema")) or []
+        allowed_schema_row_keys = {
+            "ColumnName",
+            "columnName",
+            "DataType",
+            "dataType",
+            "ColumnType",
+            "columnType",
+            "name",
+            "type",
+        }
+        sanitized_rows = [
+            {k: v for k, v in r.items() if k in allowed_schema_row_keys}
+            for r in (rows[:200] if isinstance(rows, list) else [])
+            if isinstance(r, dict) and any(k in r for k in allowed_schema_row_keys)
+        ]
+        return {
+            "ok": True,
+            "statusCode": status_code,
+            "endpoint": url,
+            "workspaceId": workspace_id,
+            "rowCount": len(rows) if isinstance(rows, list) else 0,
+            "schema": schema if isinstance(schema, list) else [],
+            "results": sanitized_rows,
+            "error": None,
+        }
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        return {
+            "ok": False,
+            "statusCode": exc.code,
+            "endpoint": url,
+            "workspaceId": workspace_id,
+            "rowCount": 0,
+            "schema": [],
+            "error": _redact_text(raw[:300]),
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "statusCode": 0,
+            "endpoint": url,
+            "workspaceId": workspace_id,
+            "rowCount": 0,
+            "schema": [],
+            "error": _redact_text(str(exc)[:300]),
+        }
+    finally:
+        _GRAPH_REQUEST_SEMAPHORE.release()
+
+
+def fetch_arm_table_schema(
+    workspace_resource_id: str,
+    table_name: str,
+    arm_token: str,
+    *,
+    api_version: str = ARM_TABLES_DEFAULT_API_VERSION,
+    timeout: int = 60,
+) -> dict[str, Any]:
+    """Read back a live Log Analytics table definition from ARM (/tables/{tableName}).
+
+    Tries ``api_version`` (default ``2025-02-01``) and falls back to ``2022-10-01`` if the
+    resource provider rejects the API version with HTTP 400.
+    """
+    ws_id = "/" + str(workspace_resource_id or "").strip().strip("/")
+    tbl = str(table_name or "").strip().split("/")[-1]
+    if ".." in ws_id or not _WORKSPACE_ARM_ID_RE.match(ws_id):
+        raise ValueError("Invalid Log Analytics workspace ARM resource ID")
+    if not tbl or ".." in tbl or "/" in tbl or "\\" in tbl:
+        raise ValueError(f"Invalid table_name: {table_name!r}")
+    if not _ARM_API_VERSION_RE.match(str(api_version or "")):
+        raise ValueError(f"Invalid ARM api_version: {api_version!r}")
+    versions_to_try = [api_version]
+    if api_version != ARM_TABLES_FALLBACK_API_VERSION:
+        versions_to_try.append(ARM_TABLES_FALLBACK_API_VERSION)
+
+    last_error: dict[str, Any] = {}
+    for ver in versions_to_try:
+        url = f"https://management.azure.com{ws_id}/tables/{urllib.parse.quote(tbl, safe='')}?api-version={ver}"
+        request = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Bearer {arm_token}",
+                "Accept": "application/json",
+            },
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                status_code = getattr(response, "status", None) or response.getcode()
+                body = json.loads(response.read().decode("utf-8", errors="replace"))
+            props = body.get("properties") if isinstance(body, dict) else {}
+            schema = props.get("schema") if isinstance(props, dict) else {}
+            raw_columns = schema.get("columns") if isinstance(schema, dict) else []
+            sanitized_columns = [
+                {
+                    "name": c.get("name"),
+                    "type": c.get("type") or c.get("dataType"),
+                    "description": c.get("description"),
+                }
+                for c in (raw_columns if isinstance(raw_columns, list) else [])
+                if isinstance(c, dict)
+            ]
+            return {
+                "ok": True,
+                "statusCode": status_code,
+                "httpStatus": status_code,
+                "apiVersion": ver,
+                "endpoint": url,
+                "requestUrl": url,
+                "workspaceResourceId": ws_id,
+                "resourceId": str(body.get("id") or "").strip() if isinstance(body, dict) else "",
+                "tableName": tbl,
+                "tableDescription": str(schema.get("description") or "") if isinstance(schema, dict) else "",
+                "columns": sanitized_columns,
+                "error": None,
+            }
+        except urllib.error.HTTPError as exc:
+            raw = exc.read().decode("utf-8", errors="replace")
+            last_error = {
+                "ok": False,
+                "statusCode": exc.code,
+                "httpStatus": exc.code,
+                "apiVersion": ver,
+                "endpoint": url,
+                "requestUrl": url,
+                "workspaceResourceId": ws_id,
+                "tableName": tbl,
+                "tableDescription": "",
+                "columns": [],
+                "error": _redact_text(raw[:300]),
+            }
+            if exc.code == 400 and ver != versions_to_try[-1]:
+                continue
+            return last_error
+        except Exception as exc:
+            return {
+                "ok": False,
+                "statusCode": 0,
+                "httpStatus": 0,
+                "apiVersion": ver,
+                "endpoint": url,
+                "requestUrl": url,
+                "workspaceResourceId": ws_id,
+                "tableName": tbl,
+                "tableDescription": "",
+                "columns": [],
+                "error": _redact_text(str(exc)[:300]),
+            }
+    return last_error
+
+
+def collect_live_table_schema_readiness_evidence(
+    solution: str | Path,
+    *,
+    workspace_resource_id: str,
+    workspace_id: str,
+    tenant_id: str | None = None,
+    state_dir: str | Path | None = None,
+    arm_token: str | None = None,
+    graph_token: str | None = None,
+    timespan: str = "P1D",
+    timeout: int = 60,
+    max_pages: int = 10,
+    _arm_fetcher=None,
+    _hunting_schema_fetcher=None,
+    _hunting_query_runner=None,
+) -> dict[str, Any]:
+    """Execute and evaluate live table schema readiness checks (VAL-TBL-01..03 and QUAL-TBL-01..03).
+
+    Wires the live ARM table readback and Graph Security beta Advanced Hunting
+    schema/query helpers into the Qualification execution path and enforces strict
+    schema/column/target/pagination verification.
+    """
+    from solution_manager.qualification.table_schema_readiness import (
+        build_expected_custom_table_map,
+        discover_solution_tables,
+        evaluate_qual_tbl_01,
+        evaluate_qual_tbl_02,
+        evaluate_qual_tbl_03,
+        evaluate_val_tbl_01,
+        evaluate_val_tbl_02,
+        evaluate_val_tbl_03,
+        serialize_expected_custom_tables,
+    )
+
+    root = Path(solution).expanduser().resolve()
+    inventory = discover_solution_tables(root)
+    expected_map = build_expected_custom_table_map(inventory)
+
+    v1_status, v1_detail = evaluate_val_tbl_01(inventory, enforce_blocking=True)
+    v2_status, v2_detail = evaluate_val_tbl_02(inventory, enforce_blocking=True)
+    v3_status, v3_detail = evaluate_val_tbl_03(inventory, enforce_blocking=True)
+    static_passed = v1_status == "PASS" and v2_status == "PASS" and v3_status == "PASS"
+
+    target_info = {
+        "workspaceResourceId": str(workspace_resource_id or "").strip(),
+        "workspaceId": str(workspace_id or "").strip(),
+    }
+
+    if not expected_map and not inventory.parse_errors:
+        return {
+            "applicable": False,
+            "status": "not_applicable",
+            "verified": True,
+            "simulated": False,
+            "enforceBlocking": True,
+            "target": target_info,
+            "customTableCount": 0,
+            "standardTableConfigCount": len(inventory.standard_table_configs),
+            "standardTableConfigNames": inventory.standard_table_config_names,
+            "staticValidation": {
+                "passed": True,
+                "VAL-TBL-01": {"status": v1_status, "detail": v1_detail},
+                "VAL-TBL-02": {"status": v2_status, "detail": v2_detail},
+                "VAL-TBL-03": {"status": v3_status, "detail": v3_detail},
+            },
+            "armTableReadback": {"status": "not_applicable", "verified": True, "tables": []},
+            "huntingSchema": {"status": "not_applicable", "verified": True, "tables": []},
+            "workspaceHuntingQuery": {"status": "not_applicable", "verified": True, "queries": []},
+            "checks": {
+                "VAL-TBL-01": {"status": "NOT_APPLICABLE", "detail": v1_detail},
+                "VAL-TBL-02": {"status": "NOT_APPLICABLE", "detail": v2_detail},
+                "VAL-TBL-03": {"status": "NOT_APPLICABLE", "detail": v3_detail},
+                "QUAL-TBL-01": {"status": "NOT_APPLICABLE", "detail": "No authored custom-log tables in solution."},
+                "QUAL-TBL-02": {"status": "NOT_APPLICABLE", "detail": "No authored custom-log tables in solution."},
+                "QUAL-TBL-03": {"status": "NOT_APPLICABLE", "detail": "No authored custom-log tables in solution."},
+            },
+        }
+
+    arm_fn = _arm_fetcher or fetch_arm_table_schema
+    schema_fn = _hunting_schema_fetcher or fetch_graph_hunting_schema_tables
+    query_fn = _hunting_query_runner or run_workspace_hunting_query_get
+
+    arm_auth_error: str | None = None
+    if not arm_token and _arm_fetcher is None:
+        try:
+            cred = azure_cli_credential(tenant_id=tenant_id, state_root=_state_dir(state_dir))
+            arm_token = cred.get_token("https://management.azure.com/.default").token
+        except Exception as exc:
+            arm_auth_error = f"ARM token acquisition failed: {exc}"
+
+    graph_auth_error: str | None = None
+    if not graph_token and (_hunting_schema_fetcher is None or _hunting_query_runner is None):
+        try:
+            graph_token = _advanced_hunting_token(_state_dir(state_dir), tenant_id=tenant_id)
+        except Exception as exc:
+            graph_auth_error = f"Graph token acquisition failed: {exc}"
+
+    # 1. QUAL-TBL-01: Live ARM table readback
+    arm_tables: list[dict[str, Any]] = []
+    if arm_auth_error:
+        arm_readback_receipt: dict[str, Any] = {
+            "ok": False,
+            "statusCode": 401,
+            "workspaceResourceId": target_info["workspaceResourceId"],
+            "workspaceId": target_info["workspaceId"],
+            "tables": [],
+            "error": arm_auth_error,
+        }
+    else:
+        for rec in expected_map.values():
+            try:
+                t_res = arm_fn(
+                    target_info["workspaceResourceId"],
+                    rec.table_name,
+                    arm_token or "",
+                    timeout=timeout,
+                )
+            except Exception as exc:
+                t_res = {
+                    "ok": False,
+                    "statusCode": 0,
+                    "workspaceResourceId": target_info["workspaceResourceId"],
+                    "tableName": rec.table_name,
+                    "tableDescription": "",
+                    "columns": [],
+                    "error": str(exc),
+                }
+            arm_tables.append(dict(t_res))
+        all_arm_ok = bool(arm_tables) and all(t.get("ok") is True for t in arm_tables)
+        first_arm_err = next((t.get("error") for t in arm_tables if t.get("error")), None)
+        first_arm_code = next(
+            (int(t.get("statusCode") or 0) for t in arm_tables if int(t.get("statusCode") or 0) >= 400),
+            200 if all_arm_ok else 0,
+        )
+        arm_readback_receipt = {
+            "ok": all_arm_ok,
+            "statusCode": first_arm_code,
+            "workspaceResourceId": target_info["workspaceResourceId"],
+            "workspaceId": target_info["workspaceId"],
+            "tables": arm_tables,
+            "error": first_arm_err,
+        }
+
+    q1_status, q1_detail = evaluate_qual_tbl_01(
+        inventory,
+        arm_readback_receipt,
+        target=target_info,
+        static_passed=static_passed,
+        enforce_blocking=True,
+    )
+    arm_readback_receipt["verified"] = q1_status == "PASS"
+    arm_readback_receipt["status"] = "passed" if q1_status == "PASS" else "failed"
+    arm_readback_receipt["summary"] = q1_detail
+
+    # 2. QUAL-TBL-02: Graph beta getHuntingSchemaTables(workspaceId=<guid>)
+    if graph_auth_error and _hunting_schema_fetcher is None:
+        hunting_schema_receipt: dict[str, Any] = {
+            "ok": False,
+            "statusCode": 401,
+            "endpoint": GRAPH_BETA_HUNTING_SCHEMA_TABLES_ENDPOINT,
+            "workspaceId": target_info["workspaceId"],
+            "workspaceResourceId": target_info["workspaceResourceId"],
+            "tables": [],
+            "complete": False,
+            "hasUnfetchedPages": True,
+            "error": graph_auth_error,
+        }
+    else:
+        try:
+            raw_hs = schema_fn(
+                graph_token or "",
+                workspace_id=target_info["workspaceId"],
+                timeout=timeout,
+                max_pages=max_pages,
+            )
+            hunting_schema_receipt = dict(raw_hs)
+            hunting_schema_receipt.setdefault("workspaceResourceId", target_info["workspaceResourceId"])
+        except Exception as exc:
+            hunting_schema_receipt = {
+                "ok": False,
+                "statusCode": 0,
+                "endpoint": GRAPH_BETA_HUNTING_SCHEMA_TABLES_ENDPOINT,
+                "workspaceId": target_info["workspaceId"],
+                "workspaceResourceId": target_info["workspaceResourceId"],
+                "tables": [],
+                "complete": False,
+                "hasUnfetchedPages": True,
+                "error": str(exc),
+            }
+
+    q2_status, q2_detail = evaluate_qual_tbl_02(
+        inventory,
+        hunting_schema_receipt,
+        target=target_info,
+        static_passed=static_passed,
+        enforce_blocking=True,
+    )
+    hunting_schema_receipt["verified"] = q2_status == "PASS"
+    hunting_schema_receipt["status"] = "passed" if q2_status == "PASS" else "failed"
+    hunting_schema_receipt["summary"] = q2_detail
+
+    # 3. QUAL-TBL-03: Graph beta getRunHuntingQuery(query='...',timespan='...',workspaceId=<guid>)
+    query_entries: list[dict[str, Any]] = []
+    if graph_auth_error and _hunting_query_runner is None:
+        hunting_query_receipt: dict[str, Any] = {
+            "ok": False,
+            "statusCode": 401,
+            "endpoint": GRAPH_BETA_RUN_HUNTING_QUERY_ENDPOINT,
+            "workspaceId": target_info["workspaceId"],
+            "workspaceResourceId": target_info["workspaceResourceId"],
+            "queries": [],
+            "error": graph_auth_error,
+        }
+    else:
+        for rec in expected_map.values():
+            probe_kql = f"{rec.table_name} | take 1"
+            try:
+                q_res = query_fn(
+                    probe_kql,
+                    graph_token or "",
+                    workspace_id=target_info["workspaceId"],
+                    timespan=timespan,
+                    timeout=timeout,
+                )
+                q_entry = dict(q_res)
+                q_entry.setdefault("tableName", rec.table_name)
+                q_entry.setdefault("query", probe_kql)
+                q_entry.setdefault("customTableQueried", True)
+            except Exception as exc:
+                q_entry = {
+                    "tableName": rec.table_name,
+                    "query": probe_kql,
+                    "customTableQueried": True,
+                    "ok": False,
+                    "statusCode": 0,
+                    "endpoint": GRAPH_BETA_RUN_HUNTING_QUERY_ENDPOINT,
+                    "workspaceId": target_info["workspaceId"],
+                    "rowCount": 0,
+                    "schema": [],
+                    "error": str(exc),
+                }
+            query_entries.append(q_entry)
+        all_q_ok = bool(query_entries) and all(q.get("ok") is True for q in query_entries)
+        first_q_err = next((q.get("error") for q in query_entries if q.get("error")), None)
+        first_q_code = next(
+            (int(q.get("statusCode") or 0) for q in query_entries if int(q.get("statusCode") or 0) >= 400),
+            200 if all_q_ok else 0,
+        )
+        hunting_query_receipt = {
+            "ok": all_q_ok,
+            "statusCode": first_q_code,
+            "endpoint": GRAPH_BETA_RUN_HUNTING_QUERY_ENDPOINT,
+            "workspaceId": target_info["workspaceId"],
+            "workspaceResourceId": target_info["workspaceResourceId"],
+            "queries": query_entries,
+            "error": first_q_err,
+        }
+
+    q3_status, q3_detail = evaluate_qual_tbl_03(
+        inventory,
+        hunting_query_receipt,
+        target=target_info,
+        static_passed=static_passed,
+        enforce_blocking=True,
+    )
+    hunting_query_receipt["verified"] = q3_status == "PASS"
+    hunting_query_receipt["status"] = "passed" if q3_status == "PASS" else "failed"
+    hunting_query_receipt["summary"] = q3_detail
+
+    overall_passed = bool(
+        static_passed and q1_status == "PASS" and q2_status == "PASS" and q3_status == "PASS"
+    )
+    return {
+        "applicable": True,
+        "status": "passed" if overall_passed else "failed",
+        "verified": overall_passed,
+        "simulated": False,
+        "enforceBlocking": True,
+        "target": target_info,
+        "customTableCount": len(expected_map),
+        "expectedCustomTables": serialize_expected_custom_tables(inventory),
+        "standardTableConfigCount": len(inventory.standard_table_configs),
+        "standardTableConfigNames": inventory.standard_table_config_names,
+        "staticValidation": {
+            "passed": static_passed,
+            "VAL-TBL-01": {"status": v1_status, "detail": v1_detail},
+            "VAL-TBL-02": {"status": v2_status, "detail": v2_detail},
+            "VAL-TBL-03": {"status": v3_status, "detail": v3_detail},
+        },
+        "armTableReadback": arm_readback_receipt,
+        "huntingSchema": hunting_schema_receipt,
+        "workspaceHuntingQuery": hunting_query_receipt,
+        "checks": {
+            "VAL-TBL-01": {"status": v1_status, "detail": v1_detail},
+            "VAL-TBL-02": {"status": v2_status, "detail": v2_detail},
+            "VAL-TBL-03": {"status": v3_status, "detail": v3_detail},
+            "QUAL-TBL-01": {"status": q1_status, "detail": q1_detail},
+            "QUAL-TBL-02": {"status": q2_status, "detail": q2_detail},
+            "QUAL-TBL-03": {"status": q3_status, "detail": q3_detail},
+        },
     }
 
 

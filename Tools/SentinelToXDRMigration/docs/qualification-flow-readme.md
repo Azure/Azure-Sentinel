@@ -204,6 +204,14 @@ sentinel-xdr-migration deploy-arm-template-acceptance-batch `
   --confirm-exact-scope-write "I approve the exact enumerated ARM template deployment acceptance batch"
 ```
 
+#### Live Custom Table Schema Qualification (`QUAL-TBL-01..03`)
+
+When the solution defines authored custom-log `Microsoft.OperationalInsights/workspaces/tables` resources, Qualification automatically executes `collect_live_table_schema_readiness_evidence` during live verification and enforces three blocking live checks in addition to `VAL-TBL-01..03`:
+- **`QUAL-TBL-01` (Live ARM table readback):** Reads back `GET https://management.azure.com{workspaceResourceId}/tables/{tableName}?api-version=2025-02-01` (with `2022-10-01` fallback), verifies `workspaceResourceId` matches the locked qualification target, and confirms `properties.schema.description` and 100% of expected custom columns and descriptions match the authored definitions.
+- **`QUAL-TBL-02` (Graph beta Advanced Hunting schema exposure):** Calls `GET https://graph.microsoft.com/beta/security/getHuntingSchemaTables(workspaceId=<unquoted-workspace-guid>)` (and `getHuntingSchema`), follows `@odata.nextLink` pagination to completion, verifies `workspaceId` matches the locked target workspace GUID, and confirms the custom table and all expected custom columns and descriptions are exposed.
+- **`QUAL-TBL-03` (Graph beta workspace-scoped Advanced Hunting query):** Calls `GET https://graph.microsoft.com/beta/security/getRunHuntingQuery(query='<escaped-kql>',timespan='P1D',workspaceId=<unquoted-workspace-guid>)` targeting the custom table (`{TableName} | getschema | project ColumnName, DataType`), verifies `workspaceId` and custom-table query binding, and confirms 100% of expected custom columns are returned.
+- **Strict failure/block rules:** An HTTP 200 status alone, missing verification fields, wrong-workspace evidence (`target_workspace_mismatch`), simulated/dry-run receipts (`simulated_receipt_rejected`), incomplete `@odata.nextLink` pagination (`incomplete_hunting_schema_pagination`), or authorization/provider failures (`endpoint_or_auth_error`) never qualify as `PASS`.
+
 ### Step 6 — Shared Mock Telemetry Ingestion & Row Parity (`QUAL-MOCK-01`, `TK-Q05`, `TK-Q08`)
 
 1. Each AR/CD pair uses **one shared `mock.json` fixture** containing a unique scenario marker and expected match keys (plus separate benign control records).
@@ -284,3 +292,29 @@ Committed evidence under `Solutions/<SolutionName>/Evidence/` includes:
 | :--- | :--- |
 | **`Qualified`** | `QUAL-00` passes with `Validated`; all applicable checks in `qualification-checks.md` (and live `migration-checks.md` checks if active) are `PASS`, with zero waivers or excluded inventory. |
 | **`Conditionally Qualified`** | `QUAL-00` and all non-waivable safety gates (`E2E-G01`, `TK-G02`..`TK-G07`, `TK-Q11`) pass; all other applicable checks pass or are `WAIVED_WITH_AUTHOR_EVIDENCE` (with `--waivers-file`), or upstream Validation is `Partially Validated`. |
+
+---
+
+## 6. Per-Check Manual Review Substitution & Troubleshooting (`QUAL-TBL-01..03`)
+
+### Per-Check Manual Review Substitution
+
+When current, inspectable `qualification-evidence.json` proves `PASS` for `VAL-TBL-01..03` and `QUAL-TBL-01..03` against the locked non-production target, `pr-qualify` populates `manualReviewSubstitution` metadata in the check results and evidence report (`SUBSTITUTABLE_MANUAL_CHECK_MAP`):
+- **`QUAL-DC-01` sub-criterion satisfied:** Custom-log table and column schema description persistence and Defender XDR Advanced Hunting schema/query exposure.
+- **`QUAL-TEXT-01` sub-criterion satisfied:** Custom-log table and column description presence, meaningfulness, and live exposure (human review of connector prose, branding, and workbook charts remains required).
+- **`E2E-Q01` sub-criterion satisfied:** Custom-log table ARM readback and Advanced Hunting workspace-scoped queryability after deployment.
+
+This is a **per-check sub-criterion substitution**, not a blanket waiver of human review or required PR approvals.
+
+### Troubleshooting `QUAL-TBL-01..03` Failures and Blocks
+
+| Check | Reason Code | Cause & Remediation |
+| :--- | :--- | :--- |
+| `QUAL-TBL-01..03` | `static_table_validation_failed` | One or more of `VAL-TBL-01..03` failed. Fix missing/placeholder descriptions in source table JSON and re-run `package-v3-1` before running live Qualification. |
+| `QUAL-TBL-01..03` | `simulated_receipt_rejected` | Evidence was marked `simulated` or `dryRun`. Re-run Qualification against a real Azure/Defender XDR non-production lab (`E2E-G01`). |
+| `QUAL-TBL-01..03` | `target_workspace_mismatch` | Evidence receipt `workspaceId` or `workspaceResourceId` does not match `qualification-target.json` (or was missing when a target workspace is locked). Re-collect live evidence against the locked target workspace. |
+| `QUAL-TBL-01..03` | `endpoint_or_auth_error` | Azure CLI or Microsoft Graph token lacked permissions (`ThreatHunting.Read.All` for Graph beta endpoints; Reader/Log Analytics Contributor on the workspace for ARM table readback). Verify `az account show` and Graph scopes, then re-run. |
+| `QUAL-TBL-02` | `incomplete_hunting_schema_pagination` | `getHuntingSchemaTables(workspaceId=...)` returned `@odata.nextLink` / `hasUnfetchedPages: true`. Ensure all pages are fetched before evaluating schema exposure. |
+| `QUAL-TBL-02` | `table_absent_from_hunting_schema` / `missing_or_mismatched_hunting_schema_descriptions` | Custom table has not yet propagated to Defender XDR Advanced Hunting schema or descriptions differ from authored JSON. Wait for workspace schema sync after ARM deployment and re-run. |
+| `QUAL-TBL-03` | `query_does_not_target_custom_table` / `missing_expected_custom_columns_in_query_schema` | The probe query did not reference the custom table or returned incomplete columns. Use `{TableName} | getschema | project ColumnName, DataType` with unquoted `workspaceId=<guid>`. |
+

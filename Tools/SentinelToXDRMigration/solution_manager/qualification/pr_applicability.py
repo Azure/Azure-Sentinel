@@ -153,6 +153,33 @@ BUILTIN_CHECK_CATALOG: list[dict[str, Any]] = [
         "category": "validation",
         "sourceChecklist": "user-e2e-requirement",
     },
+    {
+        "id": "VAL-TBL-01",
+        "checklist": "validation",
+        "title": "Custom table schema description present and meaningful (properties.schema.description)",
+        "originalCriterion": "Verify every custom Microsoft.OperationalInsights/workspaces/tables resource defines a non-empty, meaningful properties.schema.description.",
+        "contentType": "data-connectors",
+        "category": "validation",
+        "sourceChecklist": "ai-table-schema-readiness",
+    },
+    {
+        "id": "VAL-TBL-02",
+        "checklist": "validation",
+        "title": "100% custom table column description coverage (properties.schema.columns[].description)",
+        "originalCriterion": "Verify 100% of custom columns in every Microsoft.OperationalInsights/workspaces/tables resource define a non-empty, meaningful description (system columns exempted).",
+        "contentType": "data-connectors",
+        "category": "validation",
+        "sourceChecklist": "ai-table-schema-readiness",
+    },
+    {
+        "id": "VAL-TBL-03",
+        "checklist": "validation",
+        "title": "Packaged mainTemplate preserves custom table and column descriptions without loss or truncation",
+        "originalCriterion": "Verify Package/mainTemplate.json preserves every source custom table's properties.schema.description and per-column descriptions without omission or truncation.",
+        "contentType": "data-connectors,solution-package",
+        "category": "validation",
+        "sourceChecklist": "ai-table-schema-readiness",
+    },
     # -------------------------------------------------------------------------
     # Qualification Checklist (qualification)
     # -------------------------------------------------------------------------
@@ -236,6 +263,33 @@ BUILTIN_CHECK_CATALOG: list[dict[str, Any]] = [
         "contentType": "solution-package,logos",
         "category": "qualification",
         "sourceChecklist": "pr-checklist-2-docx",
+    },
+    {
+        "id": "QUAL-TBL-01",
+        "checklist": "qualification",
+        "title": "Live ARM table readback preserves custom table and column descriptions",
+        "originalCriterion": "Verify deployed Microsoft.OperationalInsights/workspaces/tables resources retain table and custom column descriptions via live ARM GET readback.",
+        "contentType": "data-connectors",
+        "category": "qualification",
+        "sourceChecklist": "ai-table-schema-readiness",
+    },
+    {
+        "id": "QUAL-TBL-02",
+        "checklist": "qualification",
+        "title": "Graph Advanced Hunting schema exposes custom table and column descriptions",
+        "originalCriterion": "Verify Microsoft Graph Security beta getHuntingSchema / getHuntingSchemaTables(workspaceId=...) exposes the deployed custom table and its descriptions.",
+        "contentType": "data-connectors",
+        "category": "qualification",
+        "sourceChecklist": "ai-table-schema-readiness",
+    },
+    {
+        "id": "QUAL-TBL-03",
+        "checklist": "qualification",
+        "title": "Graph Advanced Hunting workspace-scoped query executes against custom table",
+        "originalCriterion": "Verify Microsoft Graph Security beta getRunHuntingQuery(query=...,timespan=...,workspaceId=...) executes against each deployed custom table and returns expected schema columns.",
+        "contentType": "data-connectors",
+        "category": "qualification",
+        "sourceChecklist": "ai-table-schema-readiness",
     },
     {
         "id": "QUAL-HR-01",
@@ -709,6 +763,8 @@ def _evaluate_single_check_applicability(
     files_by_type: Mapping[str, list[str]],
     is_migration: bool,
     migration_reason: str,
+    custom_table_count: int = 0,
+    standard_table_config_count: int = 0,
 ) -> tuple[bool, str]:
     """Determine (applicable, applicabilityReason) for a single check definition."""
     cid = check_def["id"]
@@ -795,6 +851,27 @@ def _evaluate_single_check_applicability(
                 f"Applicable: solution includes {len(files_by_type.get('data-connectors', []))} Data Connector file(s).",
             )
         return False, "Not applicable: solution contains 0 Data Connectors."
+
+    if cid in {"VAL-TBL-01", "VAL-TBL-02", "VAL-TBL-03", "QUAL-TBL-01", "QUAL-TBL-02", "QUAL-TBL-03"}:
+        if custom_table_count > 0:
+            return (
+                True,
+                f"Applicable: solution defines {custom_table_count} custom Microsoft.OperationalInsights/workspaces/tables resource(s).",
+            )
+        if standard_table_config_count > 0:
+            return (
+                False,
+                f"Not applicable: solution contains {standard_table_config_count} Microsoft-standard table configuration resource(s) and 0 authored custom-log table schemas.",
+            )
+        if has_dc:
+            return (
+                True,
+                f"Applicable: solution includes {len(files_by_type.get('data-connectors', []))} Data Connector file(s) checked for custom table schema readiness.",
+            )
+        return (
+            False,
+            "Not applicable: solution contains 0 Data Connectors and 0 custom Microsoft.OperationalInsights/workspaces/tables resources.",
+        )
 
     if cid == "VAL-PRS-01":
         if has_prs:
@@ -904,6 +981,19 @@ def determine_pr_applicability(
     active_types = set(content_info["detectedContentTypes"])
     files_by_type = content_info["filesByContentType"]
 
+    from solution_manager.qualification.table_schema_readiness import discover_solution_tables
+
+    table_inventory = discover_solution_tables(root)
+    custom_table_count = (
+        len(table_inventory.custom_source_tables)
+        + len(table_inventory.custom_packaged_tables)
+        + len(table_inventory.parse_errors)
+    )
+    standard_table_config_count = (
+        len(table_inventory.standard_source_tables)
+        + len(table_inventory.standard_packaged_tables)
+    )
+
     checks: list[dict[str, Any]] = []
     checks_by_id: dict[str, dict[str, Any]] = {}
     for entry in catalog:
@@ -913,6 +1003,8 @@ def determine_pr_applicability(
             files_by_type=files_by_type,
             is_migration=migration_flag,
             migration_reason=migration_reason,
+            custom_table_count=custom_table_count,
+            standard_table_config_count=standard_table_config_count,
         )
         enriched = {
             **deepcopy(entry),

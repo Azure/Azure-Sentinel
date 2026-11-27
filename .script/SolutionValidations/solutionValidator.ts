@@ -5,7 +5,8 @@ import { IsValidSolutionDomainsVerticals } from "./validDomainsVerticals.js";
 import { IsValidSupportObject } from "./validSupportObject.js";
 import { IsValidBrandingContent } from "./validMSBranding.js";
 import { IsValidSolutionID } from "./validSolutionID.js";
-import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectValidationError, InvalidFileContentError, InvalidSolutionIDValidationError } from "../utils/validationError.js";
+import { isValidCustomTableSchemas } from "../utils/dataConnectorCheckers/customTableSchemaChecker.js";
+import { MainTemplateDomainVerticalValidationError, MainTemplateSupportObjectValidationError, InvalidFileContentError, InvalidSolutionIDValidationError, DataConnectorValidationError } from "../utils/validationError.js";
 
 
 
@@ -15,6 +16,9 @@ export async function IsValidSolution(filePath: string): Promise<ExitCode> {
     IsValidSupportObject(filePath);
     IsValidBrandingContent(filePath);
     IsValidSolutionID(filePath);
+    if (filePath.endsWith("mainTemplate.json")) {
+        isValidCustomTableSchemas(filePath);
+    }
     return ExitCode.SUCCESS;
 }
 
@@ -47,6 +51,9 @@ let CheckOptions = {
         }
         else if (e instanceof InvalidSolutionIDValidationError) {
             logger.logError("Validation for Solution ID Failed.");
+        }
+        else if (e instanceof DataConnectorValidationError) {
+            logger.logError(`Custom Table Schema Validation Failed: ${e.message}`);
         }
     },
     // Callback function to handle final failure

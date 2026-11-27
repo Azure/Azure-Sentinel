@@ -25,6 +25,16 @@ from solution_manager.core.content_paths import (
 from solution_manager.qualification.pr_applicability import (
     determine_pr_applicability,
 )
+from solution_manager.qualification.table_schema_readiness import (
+    discover_solution_tables,
+    evaluate_qual_tbl_01,
+    evaluate_qual_tbl_02,
+    evaluate_qual_tbl_03,
+    evaluate_val_tbl_01,
+    evaluate_val_tbl_02,
+    evaluate_val_tbl_03,
+    resolve_table_schema_blocking_mode,
+)
 from solution_manager.reporting.decision_manifest import (
     sanitize_decision_text,
 )
@@ -833,6 +843,10 @@ def _check_direct_override(
     simulated_flag: bool = False,
 ) -> Mapping[str, Any] | None:
     """Return per-check evidence override if caller supplied valid live qualification evidence."""
+    # Never allow summary check overrides to bypass live receipt evaluators or static
+    # VAL-TBL-01..03 prerequisites for QUAL-TBL-01..03.
+    if check_id in {"QUAL-TBL-01", "QUAL-TBL-02", "QUAL-TBL-03"}:
+        return None
     if check_def is not None:
         checklist = str(check_def.get("checklist") or "").strip().lower()
         category = str(check_def.get("category") or "").strip().lower()
@@ -882,6 +896,50 @@ def _check_direct_override(
             return None
 
     return candidate
+
+
+SUBSTITUTABLE_MANUAL_CHECK_MAP: dict[str, dict[str, str]] = {
+    "QUAL-TBL-01": {
+        "manualCheckId": "MANUAL-TBL-01",
+        "manualCheckName": "Manual Azure Portal / ARM custom table schema & description inspection",
+        "scope": "Replaces duplicate manual inspection of deployed custom table and column descriptions in Log Analytics when live ARM readback receipt passes.",
+    },
+    "QUAL-TBL-02": {
+        "manualCheckId": "MANUAL-TBL-02",
+        "manualCheckName": "Manual Defender XDR Advanced Hunting schema tree table & column description check",
+        "scope": "Replaces duplicate manual inspection of the Defender XDR Advanced Hunting schema explorer when live Graph beta getHuntingSchemaTables(workspaceId=...) receipt passes.",
+    },
+    "QUAL-TBL-03": {
+        "manualCheckId": "MANUAL-TBL-03",
+        "manualCheckName": "Manual Defender XDR Advanced Hunting custom table query execution check",
+        "scope": "Replaces duplicate manual ad-hoc Advanced Hunting query check against custom tables when live Graph beta getRunHuntingQuery(workspaceId=...) receipt passes.",
+    },
+    "QUAL-DEP-01": {
+        "manualCheckId": "MANUAL-DEP-01",
+        "manualCheckName": "Manual non-production solution template deployment check",
+        "scope": "Replaces duplicate manual ARM template deployment verification when live deployment receipt passes.",
+    },
+    "QUAL-ING-01": {
+        "manualCheckId": "MANUAL-ING-01",
+        "manualCheckName": "Manual mock data ingestion & row arrival check",
+        "scope": "Replaces duplicate manual DCR ingestion and KQL row-count check when live ingestion receipt passes.",
+    },
+    "QUAL-ACT-02": {
+        "manualCheckId": "MANUAL-ACT-02",
+        "manualCheckName": "Manual Analytic Rule & XDR Custom Detection query execution check",
+        "scope": "Replaces duplicate manual rule KQL execution check when live runtime query verification receipt passes.",
+    },
+    "QUAL-WB-01": {
+        "manualCheckId": "MANUAL-WB-01",
+        "manualCheckName": "Manual Workbook KQL panel query execution check",
+        "scope": "Replaces duplicate manual workbook panel KQL execution check when live workbook query receipt passes.",
+    },
+    "QUAL-URL-01": {
+        "manualCheckId": "MANUAL-URL-01",
+        "manualCheckName": "Manual documentation & asset URL reachability check",
+        "scope": "Replaces duplicate manual clicking of embedded URLs and image assets when automated URL verification receipt passes.",
+    },
+}
 
 
 def _build_check_result(
@@ -975,6 +1033,22 @@ def _build_check_result(
         elif sup_path.strip():
             author_exception["supportingEvidenceRef"] = sanitize_decision_text(sup_path)
 
+    manual_sub_spec = SUBSTITUTABLE_MANUAL_CHECK_MAP.get(cid)
+    manual_review_substitution: dict[str, Any] | None = None
+    if manual_sub_spec is not None:
+        has_non_empty_refs = bool(sanitized_refs)
+        can_substitute = bool(applicable and eff_status == "PASS" and has_non_empty_refs)
+        manual_review_substitution = {
+            "checkId": cid,
+            "manualCheckId": manual_sub_spec["manualCheckId"],
+            "manualCheckName": manual_sub_spec["manualCheckName"],
+            "scope": manual_sub_spec["scope"],
+            "substituted": False,
+            "eligibleForPerCheckSubstitution": can_substitute,
+            "blanketHumanReviewWaiver": False,
+            "policyStatus": "keep_existing_manual_checks_until_agreed",
+        }
+
     return {
         "id": cid,
         "checklist": str(check_def["checklist"]),
@@ -993,6 +1067,7 @@ def _build_check_result(
         "authorException": author_exception,
         "reviewerActionRequired": eff_reviewer_action,
         "reviewerActionPrompt": sanitize_decision_text(eff_reviewer_prompt) if eff_reviewer_prompt else None,
+        "manualReviewSubstitution": manual_review_substitution,
     }
 
 
@@ -1036,6 +1111,12 @@ def _evaluate_validation_checks(
     files_by_type: Mapping[str, list[str]] = applicability["filesByContentType"]
     present_by_type: Mapping[str, list[str]] = applicability["presentFilesByContentType"]
     quartet = _extract_version_quartet(solution_root, target_version=target_version)
+    table_inventory = discover_solution_tables(solution_root)
+    enforce_tbl_blocking = resolve_table_schema_blocking_mode(
+        dict(qualification_evidence) if isinstance(qualification_evidence, Mapping) else None,
+        dict(workflow_state) if isinstance(workflow_state, Mapping) else None,
+        default_blocking=True,
+    )
     results: list[dict[str, Any]] = []
 
     validation_defs = [c for c in applicability["checks"] if c["checklist"] == "validation"]
@@ -1992,6 +2073,66 @@ def _evaluate_validation_checks(
                     )
                 )
 
+        # ---------------------------------------------------------------------
+        # VAL-TBL-01..03: AI-Ready Custom Table & Column Descriptions
+        # ---------------------------------------------------------------------
+        elif cid in {"VAL-TBL-01", "VAL-TBL-02", "VAL-TBL-03"}:
+            tbl_refs: list[dict[str, Any]] = []
+            seen_ref_paths: set[str] = set()
+            for rec in table_inventory.source_tables + table_inventory.packaged_tables:
+                if rec.file_rel_path not in seen_ref_paths:
+                    seen_ref_paths.add(rec.file_rel_path)
+                    tbl_refs.append(_make_evidence_ref(f"Custom table ({rec.table_name})", rec.file_rel_path))
+            if not tbl_refs:
+                for dc_rel in files_by_type.get("data-connectors", [])[:3]:
+                    tbl_refs.append(_make_evidence_ref("Data Connector JSON", dc_rel))
+
+            if cid == "VAL-TBL-01":
+                tbl_status, tbl_obs = evaluate_val_tbl_01(table_inventory, enforce_blocking=enforce_tbl_blocking)
+                checked_msg = (
+                    "Inspected all custom Microsoft.OperationalInsights/workspaces/tables resources for "
+                    "a non-empty, meaningful properties.schema.description."
+                )
+                why_msg = (
+                    "All custom tables satisfy AI-ready table description requirements."
+                    if tbl_status == "PASS"
+                    else f"Custom table schema description validation failed: {tbl_obs}"
+                )
+            elif cid == "VAL-TBL-02":
+                tbl_status, tbl_obs = evaluate_val_tbl_02(table_inventory, enforce_blocking=enforce_tbl_blocking)
+                checked_msg = (
+                    "Inspected all custom columns in Microsoft.OperationalInsights/workspaces/tables resources "
+                    "for 100% meaningful column description coverage (system columns exempted)."
+                )
+                why_msg = (
+                    "All custom table columns satisfy 100% description coverage."
+                    if tbl_status == "PASS"
+                    else f"Custom table column description validation failed: {tbl_obs}"
+                )
+            else:
+                tbl_status, tbl_obs = evaluate_val_tbl_03(table_inventory, enforce_blocking=enforce_tbl_blocking)
+                checked_msg = (
+                    "Compared source custom table and column descriptions against Package/mainTemplate.json "
+                    "to verify preservation without omission or truncation."
+                )
+                why_msg = (
+                    "Packaged mainTemplate.json preserves all custom table and column descriptions."
+                    if tbl_status == "PASS"
+                    else f"Packaged custom table description preservation failed: {tbl_obs}"
+                )
+
+            results.append(
+                _build_check_result(
+                    cdef,
+                    status=tbl_status,
+                    what_we_checked=checked_msg,
+                    what_we_observed=tbl_obs,
+                    why_passed_or_failed=why_msg,
+                    evidence_refs=tbl_refs,
+                    author_exceptions_by_id=author_exceptions_by_id,
+                )
+            )
+
         else:
             results.append(
                 _build_check_result(
@@ -2032,32 +2173,70 @@ def _has_simulated_or_dry_run_evidence(
     """Detect whether any simulated, dry-run, or stubbed fallback was used."""
     reasons: list[str] = []
 
+    def _scan_sim_mapping(prefix: str, obj: Any) -> None:
+        if not isinstance(obj, Mapping):
+            return
+        if obj.get("simulated") is True or obj.get("isSimulated") is True:
+            reasons.append(f"{prefix}.simulated=True")
+        if obj.get("dryRun") is True or obj.get("dry_run") is True or obj.get("mock") is True:
+            reasons.append(f"{prefix}.dryRun=True")
+        if obj.get("useSimulatedFallback") is True or obj.get("fallbackUsed") is True:
+            reasons.append(f"{prefix}.useSimulatedFallback=True")
+        mode_val = str(obj.get("providerMode") or obj.get("executionMode") or obj.get("mode") or "").lower()
+        if mode_val in {"simulated", "dry-run", "dry_run", "stub", "mock", "mock-stub", "offline-fallback"}:
+            reasons.append(f"{prefix}.mode='{mode_val}'")
+        if str(obj.get("status") or "").strip().lower() == "simulated":
+            reasons.append(f"{prefix}.status='simulated'")
+
     for label, mapping in (("qualification_evidence", qualification_evidence), ("workflow_state", workflow_state)):
         if not isinstance(mapping, Mapping):
             continue
-        if mapping.get("simulated") is True:
-            reasons.append(f"{label}.simulated=True")
-        if mapping.get("dryRun") is True or mapping.get("dry_run") is True:
-            reasons.append(f"{label}.dryRun=True")
-        if mapping.get("useSimulatedFallback") is True or mapping.get("fallbackUsed") is True:
-            reasons.append(f"{label}.useSimulatedFallback=True")
-        mode = str(mapping.get("providerMode") or mapping.get("executionMode") or mapping.get("mode") or "").lower()
-        if mode in {"simulated", "dry-run", "dry_run", "stub", "mock-stub", "offline-fallback"}:
-            reasons.append(f"{label}.mode='{mode}'")
+        _scan_sim_mapping(label, mapping)
+
+        ts_root = mapping.get("tableSchemaReadiness")
+        if isinstance(ts_root, Mapping):
+            _scan_sim_mapping(f"{label}.tableSchemaReadiness", ts_root)
+            for sub_name in (
+                "armTableReadback",
+                "armTables",
+                "huntingSchema",
+                "graphHuntingSchema",
+                "huntingSchemaTables",
+                "workspaceHuntingQuery",
+                "graphRunHuntingQuery",
+                "huntingQuery",
+            ):
+                if isinstance(ts_root.get(sub_name), Mapping):
+                    _scan_sim_mapping(f"{label}.tableSchemaReadiness.{sub_name}", ts_root[sub_name])
+
+        stages_map = mapping.get("stages")
+        if isinstance(stages_map, Mapping):
+            for st_key in ("table_schema_readiness", "tableSchemaReadiness"):
+                if isinstance(stages_map.get(st_key), Mapping):
+                    _scan_sim_mapping(f"{label}.stages.{st_key}", stages_map[st_key])
+
+        for direct_sub_name in (
+            "armTableReadback",
+            "armTables",
+            "huntingSchema",
+            "graphHuntingSchema",
+            "huntingSchemaTables",
+            "workspaceHuntingQuery",
+            "graphRunHuntingQuery",
+            "huntingQuery",
+        ):
+            if isinstance(mapping.get(direct_sub_name), Mapping):
+                _scan_sim_mapping(f"{label}.{direct_sub_name}", mapping[direct_sub_name])
 
         receipts = mapping.get("providerReceipts") or mapping.get("liveReceipts")
         if isinstance(receipts, list):
             for idx, r in enumerate(receipts):
                 if isinstance(r, Mapping):
-                    rmode = str(r.get("mode") or r.get("providerMode") or "").lower()
-                    if r.get("simulated") is True or r.get("dryRun") is True or rmode in {"simulated", "dry-run", "stub"}:
-                        reasons.append(f"{label}.providerReceipts[{idx}] is simulated/dry-run")
+                    _scan_sim_mapping(f"{label}.providerReceipts[{idx}]", r)
         elif isinstance(receipts, Mapping):
             for k, r in receipts.items():
                 if isinstance(r, Mapping):
-                    rmode = str(r.get("mode") or r.get("providerMode") or "").lower()
-                    if r.get("simulated") is True or r.get("dryRun") is True or rmode in {"simulated", "dry-run", "stub"}:
-                        reasons.append(f"{label}.providerReceipts.{k} is simulated/dry-run")
+                    _scan_sim_mapping(f"{label}.providerReceipts.{k}", r)
 
     return len(reasons) > 0, reasons
 
@@ -2080,6 +2259,12 @@ def _evaluate_qualification_checks(
     qual_stages = workflow_state.get("qualificationStages") if isinstance(workflow_state.get("qualificationStages"), Mapping) else {}
     wf_stages = workflow_state.get("stages") if isinstance(workflow_state.get("stages"), Mapping) else {}
     simulated_flag, sim_reasons = _has_simulated_or_dry_run_evidence(qualification_evidence, workflow_state)
+    table_inventory = discover_solution_tables(solution_root)
+    enforce_tbl_blocking = resolve_table_schema_blocking_mode(
+        dict(qualification_evidence) if isinstance(qualification_evidence, Mapping) else None,
+        dict(workflow_state) if isinstance(workflow_state, Mapping) else None,
+        default_blocking=True,
+    )
 
     results: list[dict[str, Any]] = []
 
@@ -2826,6 +3011,187 @@ def _evaluate_qualification_checks(
                         what_we_checked="Verified live runtime KQL execution receipts across solution detections and workbooks.",
                         what_we_observed=f"Runtime KQL validation failed or used simulated evidence (simulated={simulated_flag}).",
                         why_passed_or_failed="Live runtime KQL validation must pass against real workspace/Defender surfaces.",
+                        evidence_refs=refs,
+                        author_exceptions_by_id=author_exceptions_by_id,
+                    )
+                )
+
+        # ---------------------------------------------------------------------
+        # QUAL-TBL-01..03: Live ARM Table Readback & Graph Beta Hunting Schema
+        # ---------------------------------------------------------------------
+        elif cid in {"QUAL-TBL-01", "QUAL-TBL-02", "QUAL-TBL-03"}:
+            tbl_qual_root = (
+                qualification_evidence.get("tableSchemaReadiness")
+                if isinstance(qualification_evidence.get("tableSchemaReadiness"), Mapping)
+                else (
+                    qual_stages.get("table_schema_readiness")
+                    if isinstance(qual_stages.get("table_schema_readiness"), Mapping)
+                    else (
+                        wf_stages.get("tableSchemaReadiness")
+                        if isinstance(wf_stages.get("tableSchemaReadiness"), Mapping)
+                        else {}
+                    )
+                )
+            )
+            sub_keys = {
+                "QUAL-TBL-01": ("armTableReadback", "armTables"),
+                "QUAL-TBL-02": ("huntingSchema", "graphHuntingSchema", "huntingSchemaTables"),
+                "QUAL-TBL-03": ("workspaceHuntingQuery", "graphRunHuntingQuery", "huntingQuery"),
+            }[cid]
+            sub_key = sub_keys[0]
+            sub_ev: Mapping[str, Any] | None = None
+            if isinstance(tbl_qual_root, Mapping):
+                for candidate_key in sub_keys:
+                    candidate_val = tbl_qual_root.get(candidate_key)
+                    if isinstance(candidate_val, Mapping):
+                        sub_ev = candidate_val
+                        sub_key = candidate_key
+                        break
+            if not isinstance(sub_ev, Mapping):
+                for candidate_key in sub_keys:
+                    direct_sub = qualification_evidence.get(candidate_key)
+                    if isinstance(direct_sub, Mapping):
+                        sub_ev = direct_sub
+                        sub_key = candidate_key
+                        break
+
+            has_live_qual_context = bool(
+                qualification_evidence.get("providerReceipts")
+                or qualification_evidence.get("liveReceipts")
+                or qual_stages
+                or qualification_evidence.get("deployment")
+            )
+            custom_tables = table_inventory.custom_source_tables or table_inventory.custom_packaged_tables
+            refs = [
+                _make_evidence_ref(
+                    f"Table schema readiness ({sub_key})",
+                    f"qualification_evidence.tableSchemaReadiness.{sub_key}",
+                    kind="receipt",
+                )
+            ]
+
+            static_tbl_passed = all(
+                r.get("status") in {"PASS", "NOT_APPLICABLE", "WAIVED_WITH_AUTHOR_EVIDENCE"}
+                for r in validation_results
+                if r.get("id") in {"VAL-TBL-01", "VAL-TBL-02", "VAL-TBL-03"}
+            )
+            authoritative_target_ctx = (
+                workflow_state.get("target")
+                or (workflow_state.get("context") if isinstance(workflow_state.get("context"), Mapping) else None)
+                or qualification_evidence.get("target")
+                or qualification_evidence.get("workspace")
+            )
+            receipt_target_ctx = tbl_qual_root.get("target") if isinstance(tbl_qual_root, Mapping) else None
+            target_ctx = (
+                authoritative_target_ctx
+                if isinstance(authoritative_target_ctx, Mapping) and authoritative_target_ctx
+                else receipt_target_ctx
+            )
+            target_dict = dict(target_ctx) if isinstance(target_ctx, Mapping) else None
+            root_target_conflict_error: str | None = None
+            if (
+                isinstance(authoritative_target_ctx, Mapping)
+                and authoritative_target_ctx
+                and isinstance(receipt_target_ctx, Mapping)
+                and receipt_target_ctx
+            ):
+                from solution_manager.qualification.table_schema_readiness import _check_target_conflict
+                root_target_conflict_error = _check_target_conflict(
+                    dict(authoritative_target_ctx),
+                    dict(receipt_target_ctx),
+                    cid,
+                )
+
+            if simulated_flag:
+                results.append(
+                    _build_check_result(
+                        cdef,
+                        status="FAIL",
+                        what_we_checked=cdef["originalCriterion"],
+                        what_we_observed=f"Detected simulated/dry-run indicators for {cid}: {', '.join(sim_reasons)}.",
+                        why_passed_or_failed="Fail-closed: simulated or dry-run evidence is prohibited in Qualification mode.",
+                        evidence_refs=refs,
+                        author_exceptions_by_id=author_exceptions_by_id,
+                    )
+                )
+            elif root_target_conflict_error:
+                q_fail_status = "FAIL" if enforce_tbl_blocking else "WARN"
+                results.append(
+                    _build_check_result(
+                        cdef,
+                        status=q_fail_status,
+                        what_we_checked=cdef["originalCriterion"],
+                        what_we_observed=root_target_conflict_error,
+                        why_passed_or_failed=f"Live {sub_key} verification failed: {root_target_conflict_error}",
+                        evidence_refs=refs,
+                        author_exceptions_by_id=author_exceptions_by_id,
+                    )
+                )
+            elif not custom_tables and not table_inventory.parse_errors:
+                if has_live_qual_context:
+                    results.append(
+                        _build_check_result(
+                            cdef,
+                            status="PASS",
+                            what_we_checked=cdef["originalCriterion"],
+                            what_we_observed=(
+                                "Verified 0 custom Microsoft.OperationalInsights/workspaces/tables resources in solution "
+                                "(solution uses standard/built-in tables); no custom table live schema readback required."
+                            ),
+                            why_passed_or_failed="No custom workspace tables defined in solution; standard tables used.",
+                            evidence_refs=refs,
+                            author_exceptions_by_id=author_exceptions_by_id,
+                        )
+                    )
+                else:
+                    results.append(
+                        _build_check_result(
+                            cdef,
+                            status="FAIL",
+                            what_we_checked=cdef["originalCriterion"],
+                            what_we_observed="No live qualification receipts supplied.",
+                            why_passed_or_failed="Qualification requires live provider receipts.",
+                            evidence_refs=refs,
+                            author_exceptions_by_id=author_exceptions_by_id,
+                        )
+                    )
+            else:
+                from solution_manager.qualification.table_schema_readiness import _extract_parent_envelope_error
+
+                parent_env_error: str | None = None
+                if isinstance(tbl_qual_root, Mapping) and tbl_qual_root:
+                    parent_env_error = _extract_parent_envelope_error(dict(tbl_qual_root), cid)
+                if not parent_env_error and isinstance(qualification_evidence, Mapping) and qualification_evidence:
+                    parent_env_error = _extract_parent_envelope_error(dict(qualification_evidence), cid)
+
+                effective_sub_ev: Any = sub_ev
+                if parent_env_error and isinstance(sub_ev, Mapping):
+                    effective_sub_ev = dict(sub_ev)
+                    effective_sub_ev["_parentEnvelopeError"] = parent_env_error
+
+                eval_fn = {
+                    "QUAL-TBL-01": evaluate_qual_tbl_01,
+                    "QUAL-TBL-02": evaluate_qual_tbl_02,
+                    "QUAL-TBL-03": evaluate_qual_tbl_03,
+                }[cid]
+                q_status, detail_msg = eval_fn(
+                    table_inventory,
+                    effective_sub_ev,
+                    target=target_dict,
+                    static_passed=static_tbl_passed,
+                    enforce_blocking=enforce_tbl_blocking,
+                )
+                results.append(
+                    _build_check_result(
+                        cdef,
+                        status=q_status,
+                        what_we_checked=cdef["originalCriterion"],
+                        what_we_observed=detail_msg,
+                        why_passed_or_failed=(
+                            f"Live {sub_key} verification passed: {detail_msg}"
+                            if q_status == "PASS"
+                            else f"Live {sub_key} verification failed: {detail_msg}"
+                        ),
                         evidence_refs=refs,
                         author_exceptions_by_id=author_exceptions_by_id,
                     )
@@ -3861,6 +4227,31 @@ def run_pr_qualification_checks(
     all_checks = validation_results + qualification_results + migration_results
     checks_by_id = {c["id"]: c for c in all_checks}
 
+    substitutable_entries = [
+        c["manualReviewSubstitution"]
+        for c in all_checks
+        if isinstance(c.get("manualReviewSubstitution"), Mapping)
+    ]
+    eligible_manual_checks = [
+        entry
+        for entry in substitutable_entries
+        if entry.get("eligibleForPerCheckSubstitution") is True
+    ]
+    satisfied_manual_checks = [
+        entry
+        for entry in substitutable_entries
+        if entry.get("substituted") is True
+    ]
+    manual_review_substitution_summary = {
+        "policyStatus": "keep_existing_manual_checks_until_agreed",
+        "blanketHumanReviewWaiver": False,
+        "eligibleSubstitutionsCount": len(eligible_manual_checks),
+        "totalMappedChecksCount": len(substitutable_entries),
+        "satisfiedManualCheckIds": [entry["manualCheckId"] for entry in satisfied_manual_checks],
+        "eligibleManualCheckIds": [entry["manualCheckId"] for entry in eligible_manual_checks],
+        "checks": substitutable_entries,
+    }
+
     summary = {
         "totalChecks": len(all_checks),
         "applicableChecks": sum(1 for c in all_checks if c["applicable"]),
@@ -3958,6 +4349,9 @@ def run_pr_qualification_checks(
         },
         "summary": summary,
         "summaryCounts": summary_counts,
+        "manualReviewSubstitution": manual_review_substitution_summary,
+        "SatisfiedManualChecksByQualificationEvidence": satisfied_manual_checks,
+        "EligibleManualCheckSubstitutionsByQualificationEvidence": eligible_manual_checks,
     }
 
 
