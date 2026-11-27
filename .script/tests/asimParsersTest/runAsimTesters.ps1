@@ -4,7 +4,7 @@
 #
 # The script performs the following steps:
 #   1. Detects ASIM query-time parser YAML files modified in the current PR, excluding
-#      IngestTimeParsers, by diffing against upstream/master.
+#      IngestTimeParsers, using the pinned PR data context in CI or upstream/master locally.
 #   2. Converts each parser YAML to an object and wraps its query in a KQL let statement.
 #   3. Runs the ASimSchemaTester against each parser to verify its output conforms to the ASIM schema.
 #   4. Runs the ASimDataTester against each parser using the last 30 minutes of ingested data.
@@ -49,21 +49,31 @@ Class Parser {
 $global:testErrors = @()
 
 function run {
-    Write-Host "This is the script from PR."
-    # Check if upstream remote already exists
-    $remoteExists = Invoke-Expression "git remote" | Select-String -Pattern "upstream"
+    if ($env:ASIM_PR_DATA_DIR -or $env:ASIM_TRUSTED_BASE_REF) {
+        if (-not $env:ASIM_PR_DATA_DIR -or -not $env:ASIM_TRUSTED_BASE_REF) {
+            throw "ASIM_PR_DATA_DIR and ASIM_TRUSTED_BASE_REF must be set together."
+        }
+        $modifiedFilesStatus = & git -C $env:ASIM_PR_DATA_DIR diff --name-status `
+            $env:ASIM_TRUSTED_BASE_REF -- Parsers/
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unable to discover query-time parser changes."
+        }
+    } else {
+        # Check if upstream remote already exists
+        $remoteExists = Invoke-Expression "git remote" | Select-String -Pattern "upstream"
 
-    if (-not $remoteExists) {
-        Write-Host "Adding upstream remote..."
-        Invoke-Expression "git remote add upstream $SentinelRepoUrl"
+        if (-not $remoteExists) {
+            Write-Host "Adding upstream remote..."
+            Invoke-Expression "git remote add upstream $SentinelRepoUrl"
+        }
+
+        # Fetch the latest changes from upstream repositories
+        Write-Host "Fetching latest changes from upstream..."
+        Invoke-Expression "git fetch upstream" *> $null
+
+        # Get modified ASIM Parser files along with their status
+        $modifiedFilesStatus = Invoke-Expression "git diff --name-status upstream/master -- $($PSScriptRoot)/../../../Parsers/"
     }
-
-    # Fetch the latest changes from upstream repositories
-    Write-Host "Fetching latest changes from upstream..."
-    Invoke-Expression "git fetch upstream" *> $null
-
-    # Get modified ASIM Parser files along with their status
-    $modifiedFilesStatus = Invoke-Expression "git diff --name-status upstream/master -- $($PSScriptRoot)/../../../Parsers/"
     # Split the output into lines
     $modifiedFilesStatusLines = $modifiedFilesStatus -split "`n"
     # Initialize an empty array to store the file names and their status
@@ -109,7 +119,12 @@ function run {
 }
 
 function testSchema([string] $ParserFile) {
-    $parsersAsObject = & "$($PSScriptRoot)/convertYamlToObject.ps1" -Path "$ParserFile"
+    $parserPath = if ($env:ASIM_PR_DATA_DIR) {
+        Join-Path $env:ASIM_PR_DATA_DIR $ParserFile
+    } else {
+        $ParserFile
+    }
+    $parsersAsObject = & "$($PSScriptRoot)/convertYamlToObject.ps1" -Path $parserPath
     $functionName = "$($parsersAsObject.EquivalentBuiltInParser)V$($parsersAsObject.Parser.Version.Replace('.', ''))"
     # Iterate over the modified files
     for ($i = 0; $i -lt $modifiedFiles.Count; $i++) {

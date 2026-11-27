@@ -1,5 +1,9 @@
 # Changelog for ASimDns.yaml
 
+## Version 0.5.7
+
+- (2026-11-26) Forward the `pack` parameter to the Gigamon V-Series DNS parser - [PR #15704](https://github.com/Azure/Azure-Sentinel/pull/15704)
+
 ## Version 0.5.6
 
 - (2026-10-23) Added the CrowdStrike Falcon Data Replicator DNS parser with disable-watchlist and `pack` parameter support - [PR #15417](https://github.com/Azure/Azure-Sentinel/pull/15417)

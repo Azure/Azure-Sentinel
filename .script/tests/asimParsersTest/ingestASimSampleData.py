@@ -4,7 +4,7 @@
 #
 # It expects the Azure-Sentinel repo to be checked out locally and works as follows:
 #   1. Detects modified ASIM query-time parser YAML files, excluding IngestTimeParsers,
-#      by comparing the current branch against upstream/master.
+#      using the pinned PR data context in CI or upstream/master locally.
 #   2. Reads each parser YAML from the local repo to extract schema, vendor, and product info.
 #   3. Retains matching legacy sample CSVs, using source-specific files for target collisions.
 #   4. For custom log tables: creates the table and a Data Collection Rule (DCR), then ingests data.
@@ -91,6 +91,9 @@ def log_arm_response(operation, resource_name, response):
     )
 
 def get_modified_files(current_directory):
+    modified_files = parser_file_utils.get_query_time_modified_files()
+    if modified_files is not None:
+        return modified_files
     # Add upstream remote if not already present
     git_remote_command = "git remote"
     remote_result = subprocess.run(git_remote_command, shell=True, text=True, capture_output=True, check=True)
@@ -566,7 +569,9 @@ for file in parser_yaml_files:
         print(f"Ignoring this {file} because it is a union or empty parser file")
         continue        
     print(f"Starting ingestion for sample data present in {file}")
-    repo_root = os.path.abspath(os.path.join(current_directory, '..', '..', '..'))
+    repo_root = os.getenv("ASIM_PR_DATA_DIR") or os.path.abspath(
+        os.path.join(current_directory, '..', '..', '..')
+    )
     asim_parser_path = os.path.join(repo_root, file)
     print(f"Reading Asim Parser file from local path: {asim_parser_path}")
     try:

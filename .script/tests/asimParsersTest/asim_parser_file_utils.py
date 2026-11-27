@@ -1,6 +1,8 @@
 import csv
 import json
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -210,6 +212,21 @@ def filter_query_time_parser_files(modified_files):
         if path.endswith('.yaml')
         and 'IngestTimeParsers' not in path.replace('\\', '/').split('/')
     ]
+
+def get_query_time_modified_files():
+    data_dir = os.getenv("ASIM_PR_DATA_DIR")
+    base_ref = os.getenv("ASIM_TRUSTED_BASE_REF")
+    if data_dir is None and base_ref is None:
+        return None
+    if not data_dir or not base_ref:
+        raise ValueError("ASIM_PR_DATA_DIR and ASIM_TRUSTED_BASE_REF must be set together.")
+    return subprocess.check_output(
+        [
+            "git", "-C", data_dir, "diff", "--name-only",
+            base_ref, "--", "Parsers/",
+        ],
+        text=True,
+    ).splitlines()
 
 def resolve_sample_data_path(sample_data_dir, event_vendor, event_product, schema, parser_query):
     """Keep matching legacy data; use source-specific data for target collisions."""
