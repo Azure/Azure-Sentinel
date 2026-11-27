@@ -1,0 +1,114 @@
+id: 2d920e74-687d-4639-952a-8021297a5e66
+name: Uncommon package loaded by LSA or SAM
+description: |
+  Identifies a package that is not shipped with Windows being loaded by the Local Security Authority (LSA) or the Security Account Manager (SAM): an authentication package (event 4610), a security package (event 4622) or a notification package such as a password filter (event 4614).
+  These DLLs run inside lsass.exe with access to credentials, and password filters receive every new password in clear text, so adversaries register malicious ones, such as mimilib, for persistence and credential theft.
+  The events are logged whenever a package is loaded, no matter how it was registered, and require auditing of the Security System Extension subcategory.
+  Add legitimate third-party packages, such as security products, Cygwin (cyglsa), Lithnet Password Protection or the Microsoft Identity Manager password change notification service, to the lists at the top of the query.
+  A DLL on the lists is trusted only when it is loaded directly from \Windows\System32 on any drive. If Windows is installed in a different folder on some hosts, add that folder to SystemFolders. If the package value can't be read from an event, the event is not filtered out and the alert shows the package as unknown.
+  Reference: https://learn.microsoft.com/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/audit-security-system-extension
+severity: Medium
+status: InPreview
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+  - CredentialAccess
+  - DefenseEvasion
+relevantTechniques:
+  - T1547.002
+  - T1547.005
+  - T1556.002
+query: |
+  // Packages shipped with Windows. Add packages that are expected in your environment.
+  // 4610 and 4622: a DLL is allowed only if its file name is on the list and it is loaded directly from one of the SystemFolders.
+  // Any drive letter is accepted. Windows Vista and later always install to a folder named Windows,
+  // so add a folder here only if some hosts have Windows in a different one. Write it without the drive letter.
+  let SystemFolders = dynamic([@"\Windows\System32"]);
+  let AllowedAuthenticationPackages = dynamic(["msv1_0.dll"]);
+  // clusauthmgr.dll is loaded on failover cluster nodes
+  let AllowedSecurityPackages = dynamic([
+      "cloudap.dll", "kerberos.dll", "lsasrv.dll", "msv1_0.dll", "negoexts.dll", "pku2u.dll",
+      "schannel.dll", "sfapm.dll", "tspkg.dll", "wdigest.dll", "clusauthmgr.dll"
+  ]);
+  // 4614: this event has no path, only the name the package was registered with.
+  // clusauthmgr is loaded on failover cluster nodes, azureadpasswordprotectionpfd.dll is the Microsoft Entra Password Protection DC agent.
+  let AllowedNotificationPackages = dynamic([
+      "kdcpw", "kdcsvc", "rassfm", "scecli", "wdigest", "clusauthmgr", "azureadpasswordprotectionpfd.dll"
+  ]);
+  SecurityEvent
+  | where EventID in (4610, 4614, 4622)
+  // 4610 can use the AuthenticationPackageName column, the values of 4614 and 4622 are only in EventData
+  | extend LoadedPackage = case(
+      EventID == 4610, coalesce(AuthenticationPackageName, extract(@'<Data Name="AuthenticationPackageName">([^<]*)</Data>', 1, EventData)),
+      EventID == 4614, extract(@'<Data Name="NotificationPackageName">([^<]*)</Data>', 1, EventData),
+      extract(@'<Data Name="SecurityPackageName">([^<]*)</Data>', 1, EventData))
+  // For 4610 and 4622 the value is "<DLL path> : <package name>". The package name is chosen by the package itself, so only the DLL path is checked.
+  | extend DllPath = iff(EventID == 4614, "", extract(@'^(.*?)\s*:\s', 1, LoadedPackage))
+  // Folder of the DLL without the drive letter, and the DLL file name if that folder is one of the SystemFolders
+  | extend DllFolder = extract(@'^[A-Za-z]:(\\.*)\\[^\\]+$', 1, DllPath)
+  | extend SystemDllName = iff(DllFolder in~ (SystemFolders), tolower(extract(@'([^\\]+)$', 1, DllPath)), "")
+  // Only a match with the lists removes an event. If the package value can't be read from the event, it stays empty,
+  // matches nothing and the event still alerts, so a parsing problem is shown instead of being silently dropped.
+  | where not(
+      (EventID == 4610 and SystemDllName in (AllowedAuthenticationPackages))
+      or (EventID == 4622 and SystemDllName in (AllowedSecurityPackages))
+      or (EventID == 4614 and tolower(LoadedPackage) in (AllowedNotificationPackages)))
+  | extend PackageType = case(
+      EventID == 4610, "authentication package",
+      EventID == 4614, "password filter",
+      "security package")
+  | extend FileName = iff(EventID == 4614, LoadedPackage, extract(@'([^\\]+)$', 1, DllPath)),
+           FileDirectory = iff(EventID == 4614, "", extract(@'^(.*)\\[^\\]+$', 1, DllPath))
+  | extend LoadedPackage = iff(isempty(LoadedPackage), "unknown (package value not found in the event)", LoadedPackage)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), EventCount = count()
+      by Computer, EventID, PackageType, LoadedPackage, FileName, FileDirectory
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), "")
+  | project-away DomainIndex
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileName
+      - identifier: Directory
+        columnName: FileDirectory
+customDetails:
+  PackageType: PackageType
+  LoadedPackage: LoadedPackage
+  EventID: EventID
+alertDetailsOverride:
+  alertDisplayNameFormat: Uncommon {{PackageType}} loaded on {{Computer}}
+  alertDescriptionFormat: |-
+    {{Computer}} loaded a package into LSA or SAM that is not on the list of packages shipped with Windows: {{LoadedPackage}}. Check which software installed the DLL, when it was registered and whether it is expected on this host.
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0
+kind: Scheduled
+metadata:
+  source:
+    kind: Community
+  author:
+    name: Bartosz Siedlikowski
+  support:
+    tier: Community
+  categories:
+    domains: [ "Security - Threat Protection" ]
