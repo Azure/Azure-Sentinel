@@ -1,8 +1,8 @@
 ﻿id: 39844fcb-d451-4050-ae41-23c8f27b611c
 Function:
   Title: Parser for BitSightFindingsSummary
-  Version: '1.1.0'
-  LastUpdated: '2026-05-25'
+  Version: '1.2.0'
+  LastUpdated: '2026-10-21'
 Category: Microsoft Sentinel Parser
 FunctionName: BitSightFindingsSummary
 FunctionAlias: BitSightFindingsSummary
@@ -42,7 +42,7 @@ FunctionQuery: |
         ),
         (
             BitSightFindingsSummary_CL
-            | summarize arg_max(TimeGenerated, *) by CompanyGuid, StartDate, EndDate
+            | summarize arg_max(TimeGenerated, *) by CompanyGuid, StartDate, EndDate, ConnectorName
             | mv-expand StatEntry = Stats
             | extend
                     EventVendor = "BitSight",
@@ -55,9 +55,13 @@ FunctionQuery: |
                     FirstSeen = tostring(StatEntry["first_seen"])
             | join kind=leftouter (
                 BitsightVulnerabilitiesFindingsSummary_CL
-                | summarize arg_max(TimeGenerated, *) by DisplayName
-                | project DisplayName, VulnSeverity = Severity, VulnDescription = Description
-            ) on $left.StatName == $right.DisplayName
+                | summarize arg_max(TimeGenerated, *) by DisplayName, ConnectorName
+                | project
+                        DisplayName,
+                        VulnSeverity = Severity,
+                        VulnDescription = Description,
+                        VulnerabilityConnectorName = ConnectorName
+            ) on $left.StatName == $right.DisplayName, $left.ConnectorName == $right.VulnerabilityConnectorName
             | project
                     TimeGenerated,
                     EventVendor,

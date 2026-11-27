@@ -1,8 +1,8 @@
 ﻿id: 6495f5c6-12ac-4416-8060-94e3cfad695b
 Function:
   Title: Parser for BitSightGraphData
-  Version: '1.1.0'
-  LastUpdated: '2026-05-25'
+  Version: '1.2.0'
+  LastUpdated: '2026-10-21'
 Category: Microsoft Sentinel Parser
 FunctionName: BitSightGraphData
 FunctionAlias: BitSightGraphData
@@ -28,7 +28,7 @@ FunctionQuery: |
         ),
         (
             BitSightCompanyDetails_CL
-            | summarize arg_max(TimeGenerated, *) by Guid
+            | summarize arg_max(TimeGenerated, *) by Guid, ConnectorName
             | mv-expand RatingEntry = Ratings
             | extend
                     EventVendor = "BitSight",
@@ -38,15 +38,16 @@ FunctionQuery: |
                     Rating = toint(RatingEntry["rating"]),
                     RatingRange = tostring(RatingEntry["range"]),
                     RatingColor = tostring(RatingEntry["rating_color"])
-            | sort by Guid asc, RatingDate asc
+            | sort by ConnectorName asc, Guid asc, RatingDate asc
             | serialize
             | extend
+                    PrevConnectorName = prev(ConnectorName, 1),
                     PrevGuid = prev(Guid, 1),
                     PrevRating = prev(Rating, 1)
             | extend
-                    RatingDifference = iff(Guid == PrevGuid, Rating - PrevRating, int(null)),
-                    RatingDifferance = iff(Guid == PrevGuid, Rating - PrevRating, int(null))
-            | project-away PrevGuid, PrevRating
+                    RatingDifference = iff(ConnectorName == PrevConnectorName and Guid == PrevGuid, Rating - PrevRating, int(null)),
+                    RatingDifferance = iff(ConnectorName == PrevConnectorName and Guid == PrevGuid, Rating - PrevRating, int(null))
+            | project-away PrevConnectorName, PrevGuid, PrevRating
             | project
                     TimeGenerated,
                     EventVendor,
