@@ -1,5 +1,9 @@
 # Changelog for ASimAlertEvent.yaml
 
+## Version 0.2.2
+
+- (2026-11-27) Add TrendAI Visione One Workbench AlertEvent parsers - [PR #xxxxx](https://github.com/Azure/Azure-Sentinel/pull/xxxxx)
+
 ## Version 0.2.1
 
 - (2026-10-05) Normalize the ASIM schema version to 0.1.0 - [PR #15265](https://github.com/Azure/Azure-Sentinel/pull/15265)

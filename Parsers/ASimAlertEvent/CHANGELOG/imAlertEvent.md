@@ -1,5 +1,9 @@
 # Changelog for imAlertEvent.yaml
 
+## Version 0.2.3
+
+- (2026-11-27) Add TrendAI Visione One Workbench AlertEvent filtering parsers - [PR #xxxxx](https://github.com/Azure/Azure-Sentinel/pull/xxxxx)
+
 ## Version 0.2.2
 
 - (2026-10-08) Corrected the Bitdefender GravityZone, Microsoft Defender XDR, SentinelOne Singularity, and Google SecOps parser disable watchlist keys - [PR #15291](https://github.com/Azure/Azure-Sentinel/pull/15291)
