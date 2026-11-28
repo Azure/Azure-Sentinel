@@ -7,6 +7,7 @@ description-detailed: |
   This hunt joins successful sign-ins from SigninLogs and AADNonInteractiveUserSignInLogs to the Terminated Employees watchlist (alias TerminatedEmployees, created from the built-in watchlist template) and keeps sign-ins after each user's termination date. Non-interactive sign-ins are included because a device that is still signed in keeps refreshing tokens without a password prompt.
   It complements SuccessfulSignInAfterAccountDisabled, which needs a "Disable account" audit event. This query uses HR termination data instead, so it also finds leavers whose accounts were never disabled.
   StartTime is the earliest sign-in after termination within the lookback. Increase the lookback to cover older termination dates, within your SigninLogs retention.
+  The query treats Termination date as the last working day: Termination date is a day-only value (midnight UTC), so sign-ins are counted from Termination date + terminationOffset (default 1d). Set terminationOffset to 0d if your HR process records the first day without access. If a user appears on the watchlist more than once, the latest termination date is used.
   References:
   - https://learn.microsoft.com/azure/sentinel/watchlist-schemas
   - https://attack.mitre.org/techniques/T1078/004/
@@ -22,6 +23,7 @@ relevantTechniques:
   - T1078.004
 query: |
   let lookback = 30d;
+  let terminationOffset = 1d;
   // Users marked Terminated on the Terminated Employees watchlist, with their termination date
   let Leavers = Watchlist
     | where WatchlistAlias == "TerminatedEmployees"
@@ -29,13 +31,14 @@ query: |
     | where _DTItemStatus != "Delete"
     | where tostring(WatchlistItem["UserState"]) =~ "Terminated"
     | project UPN = tolower(tostring(WatchlistItem["User Principal Name"])),
-              LeaveDate = todatetime(tostring(WatchlistItem["Termination date"]));
+              LeaveDate = todatetime(tostring(WatchlistItem["Termination date"]))
+    | summarize LeaveDate = max(LeaveDate) by UPN;
   union SigninLogs, AADNonInteractiveUserSignInLogs
   | where TimeGenerated >= ago(lookback)
   | where ResultType == "0"
   | extend UPN = tolower(UserPrincipalName)
   | join kind=inner Leavers on UPN
-  | where TimeGenerated > LeaveDate
+  | where TimeGenerated > LeaveDate + terminationOffset
   | summarize SignIns = count(),
               StartTime = min(TimeGenerated),
               EndTime = max(TimeGenerated),
