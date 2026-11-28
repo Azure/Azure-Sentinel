@@ -1,0 +1,131 @@
+id: 28cd621f-e382-4cab-902a-c9ca5544e2b9
+name: Process executes commands or compiles code shortly after contacting an LLM API
+description: |
+  Identifies AI-enabled ("LLM-in-the-loop") malware that calls a large language model API at runtime and then acts on
+  the response. The query finds processes other than browsers and known AI clients connecting to LLM API endpoints
+  (Gemini, Hugging Face, OpenAI, Azure OpenAI, Anthropic, DeepSeek, Mistral, OpenRouter and others), then checks whether
+  the same process (matched on process ID and start time) launches a compiler, shell or LOLBin within 60 seconds.
+  GTIG has reported several families that work this way: PROMPTSTEAL (LAMEHUG, used by APT28) asks Qwen2.5-Coder through
+  the Hugging Face API for Windows commands and runs them, PROMPTFLUX is a VBScript dropper that asks Gemini to rewrite
+  its own code, and HONESTCUE asks Gemini for C# source code and compiles it in memory with CSharpCodeProvider, which
+  launches csc.exe. Because the code or commands are generated at runtime, signatures change between runs and
+  behaviour-based detection is needed.
+  Results are labelled:
+  - High: a compiler (csc.exe, vbc.exe, jsc.exe, msbuild.exe) started by the process after the LLM call (HONESTCUE pattern).
+  - High: discovery or collection commands (systeminfo, whoami, ipconfig, tasklist, net, nltest, wmic) run after the LLM
+    call (PROMPTSTEAL pattern).
+  - High: a script host (wscript, cscript, mshta) calling an LLM API (PROMPTFLUX pattern).
+  - Medium: any shell or LOLBin started by the process after the LLM call.
+  - Low: an LLM API called by a non-interpreter process running from a user-writable path (AppData, Downloads, Desktop,
+    Documents, ProgramData, Windows\Temp).
+  False positives and exclusions:
+  - Browsers and known AI clients (Claude Code, Codex, Gemini CLI, Cursor, VS Code, ChatGPT and Copilot desktop apps,
+    Ollama, LM Studio, Teams, Outlook) are excluded because they call LLM APIs and start shells as normal behaviour.
+    Add any sanctioned AI tools used in your environment to KnownAiClients.
+  - Developer scripts and agent frameworks (Python, Node, LangChain-style apps) can call an LLM and then run a shell.
+    Interpreters are not flagged at the Low tier, but can still match the Medium and High tiers. Tune by device group
+    or add known automation hosts.
+  - Line-of-business applications installed per user under AppData that integrate an LLM API can match the Low tier.
+  - The AI Governance community workbook and its watchlists track sanctioned use of AI services; this query instead
+    looks for malicious use, so the two are complementary.
+  Known limits:
+  - Hosts are matched by name, so malware that reaches an LLM through a proxy, a self-hosted model or an unlisted
+    provider is missed. Extend LlmApiHosts as needed.
+  - Commands run in memory without starting a child process (for example PowerShell runspaces) are not seen as a child;
+    such callers can still appear through the script-host or user-writable-path tiers.
+  - The 60-second ExecWindow is a heuristic. Malware that waits longer before acting falls outside it.
+  References:
+  https://cloud.google.com/blog/topics/threat-intelligence/threat-actor-usage-of-ai-tools
+  https://cloud.google.com/blog/topics/threat-intelligence/distillation-experimentation-integration-ai-adversarial-use
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+      - DeviceProcessEvents
+tactics:
+  - CommandAndControl
+  - Execution
+  - DefenseEvasion
+  - Discovery
+relevantTechniques:
+  - T1102
+  - T1059
+  - T1027.004
+  - T1082
+query: |
+  let timeframe = 7d;
+  let ExecWindow = 60s;
+  let LlmApiHosts = dynamic(["generativelanguage.googleapis.com", "aiplatform.googleapis.com", "api-inference.huggingface.co", "router.huggingface.co", "huggingface.co", "api.openai.com", "api.anthropic.com", "api.deepseek.com", "api.mistral.ai", "openrouter.ai", "api.groq.com", "api.together.xyz", "api.together.ai", "api.cohere.ai", "api.cohere.com", "api.x.ai", "api.perplexity.ai", "dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com", "api.moonshot.cn", "api.moonshot.ai"]);
+  let Browsers = dynamic(["chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe", "iexplore.exe", "msedgewebview2.exe"]);
+  let KnownAiClients = dynamic(["claude.exe", "claude", "codex.exe", "codex", "gemini.exe", "gemini", "cursor.exe", "code.exe", "windsurf.exe", "chatgpt.exe", "copilot.exe", "ollama.exe", "lm studio.exe", "ms-teams.exe", "olk.exe", "outlook.exe"]);
+  let ScriptHosts = dynamic(["wscript.exe", "cscript.exe", "mshta.exe"]);
+  let Interpreters = dynamic(["python.exe", "pythonw.exe", "py.exe", "node.exe", "java.exe", "javaw.exe", "deno.exe", "bun.exe", "powershell.exe", "pwsh.exe"]);
+  let Compilers = dynamic(["csc.exe", "vbc.exe", "jsc.exe", "msbuild.exe"]);
+  let ShellsAndLolbins = dynamic(["cmd.exe", "powershell.exe", "pwsh.exe", "wscript.exe", "cscript.exe", "mshta.exe", "rundll32.exe", "regsvr32.exe", "certutil.exe", "bitsadmin.exe", "schtasks.exe", "reg.exe", "wmic.exe", "whoami.exe", "systeminfo.exe", "tasklist.exe", "ipconfig.exe", "net.exe", "net1.exe", "nltest.exe", "curl.exe"]);
+  let DiscoveryPattern = @"(?i)\b(whoami|systeminfo|ipconfig|tasklist|hostname|nltest|quser|wmic|get-childitem|get-process|reg\s+query|net\s+(user|group|localgroup|view|share|use)|dir\s+/s)\b";
+  let UserWritablePath = @"(?i)\\(users\\[^\\]+\\(appdata|downloads|desktop|documents)|programdata|windows\\temp|perflogs)\\";
+  // Signal 1 - LLM API calls from processes that are not browsers or known AI clients
+  let LlmCalls = DeviceNetworkEvents
+  | where TimeGenerated >= ago(timeframe)
+  | where isnotempty(RemoteUrl)
+  | extend LlmHost = tolower(extract(@"^(?:[a-zA-Z]+://)?([^/:]+)", 1, RemoteUrl))
+  | where LlmHost in (LlmApiHosts) or LlmHost endswith ".openai.azure.com" or LlmHost endswith ".services.ai.azure.com"
+  | where not(InitiatingProcessFileName in~ (Browsers)) and not(InitiatingProcessFileName in~ (KnownAiClients))
+  | where not(InitiatingProcessFileName in~ ("node.exe", "node") and InitiatingProcessCommandLine matches regex @"(?i)(claude-code|gemini-cli|@openai[\\/]codex)")
+  | summarize FirstLlmCall = min(TimeGenerated), LastLlmCall = max(TimeGenerated), LlmCallCount = count(), ContactedLlmHosts = make_set(LlmHost, 10),
+      CallerCommandLine = take_any(InitiatingProcessCommandLine), CallerPath = take_any(InitiatingProcessFolderPath),
+      AccountName = take_any(InitiatingProcessAccountName), AccountDomain = take_any(InitiatingProcessAccountDomain), ReportId = take_any(ReportId)
+      by DeviceName, CallerProcess = InitiatingProcessFileName, CallerPid = InitiatingProcessId, CallerStart = InitiatingProcessCreationTime;
+  // Signal 2 - compilers, shells and LOLBins started by the same process (matched on PID and process start time)
+  let Children = DeviceProcessEvents
+  | where TimeGenerated >= ago(timeframe)
+  | where FileName in~ (Compilers) or FileName in~ (ShellsAndLolbins)
+  | project DeviceName, CallerPid = InitiatingProcessId, CallerStart = InitiatingProcessCreationTime, ChildTime = TimeGenerated, ChildProcess = FileName, ChildCommandLine = ProcessCommandLine;
+  LlmCalls
+  | join kind=leftouter Children on DeviceName, CallerPid, CallerStart
+  // Signal 3 - timing: the child starts between the first LLM call and ExecWindow after the last one
+  | extend InWindow = isnotnull(ChildTime) and ChildTime between (FirstLlmCall .. (LastLlmCall + ExecWindow))
+  | summarize
+      RuntimeCompile = max(toint(InWindow and ChildProcess in~ (Compilers))),
+      DiscoveryAfterLlm = max(toint(InWindow and ChildCommandLine matches regex DiscoveryPattern)),
+      ShellAfterLlm = max(toint(InWindow and ChildProcess in~ (ShellsAndLolbins))),
+      ChildProcesses = make_set_if(ChildProcess, InWindow, 20),
+      ChildCommandLines = make_set_if(ChildCommandLine, InWindow, 10),
+      FirstChildTime = minif(ChildTime, InWindow)
+      by DeviceName, CallerProcess, CallerPid, CallerStart, CallerCommandLine, CallerPath, FirstLlmCall, LastLlmCall, LlmCallCount, ContactedLlmHosts = tostring(ContactedLlmHosts), AccountName, AccountDomain, ReportId
+  | extend IsScriptHost = CallerProcess in~ (ScriptHosts)
+  | extend FromUserWritablePath = not(CallerProcess in~ (Interpreters)) and CallerPath matches regex UserWritablePath
+  | where RuntimeCompile == 1 or DiscoveryAfterLlm == 1 or IsScriptHost or ShellAfterLlm == 1 or FromUserWritablePath
+  | extend SecondsToFirstChild = datetime_diff('second', FirstChildTime, FirstLlmCall)
+  | extend Verdict = case(
+      RuntimeCompile == 1, "High - LLM API call followed by runtime .NET compilation by the same process (HONESTCUE pattern)",
+      DiscoveryAfterLlm == 1, "High - LLM API call followed by discovery or collection commands (PROMPTSTEAL pattern)",
+      IsScriptHost, "High - script host calling an LLM API (PROMPTFLUX pattern)",
+      ShellAfterLlm == 1, "Medium - LLM API call followed by a shell or LOLBin started by the same process",
+      "Low - LLM API called by an uncommon process running from a user-writable path")
+  | extend AccountCustomEntity = AccountName
+  | extend HostCustomEntity = DeviceName
+  | project FirstLlmCall, LastLlmCall, DeviceName, HostCustomEntity, AccountName, AccountCustomEntity, AccountDomain, Verdict, CallerProcess, CallerPath, CallerCommandLine, CallerPid, ContactedLlmHosts, LlmCallCount, ChildProcesses, ChildCommandLines, SecondsToFirstChild, ReportId
+  | sort by FirstLlmCall desc
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+      - identifier: NTDomain
+        columnName: AccountDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostCustomEntity
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Syed Ishrar Ali
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]
