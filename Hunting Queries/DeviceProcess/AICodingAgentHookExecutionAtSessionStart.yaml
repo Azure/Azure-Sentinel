@@ -1,0 +1,133 @@
+id: e247384b-24d8-42fe-b61a-83b3e92f6552
+name: AI coding agent startup hook executing a script or download
+description: |
+  Identifies AI coding agents (Claude Code, Gemini CLI) launching a shell or interpreter that runs a script from an
+  agent or repository folder (.claude, .gemini, .github, .vscode) or a download one-liner, where the command starts
+  within 30 seconds of the agent process or follows a write to the agent's settings.json by another process.
+  Claude Code and Gemini CLI run hooks defined in settings.json, and a SessionStart hook executes automatically when
+  a session begins, before the user types a prompt. Attackers plant these hooks to get code execution on developer
+  machines: GTIG reported a DPRK-nexus cluster (MIDNIGHT NEPTUNE) abusing .claude/settings.json to download the
+  SOMBERMEME backdoor on Claude Code startup, and the Mini Shai-Hulud and Miasma worms inject SessionStart hooks that
+  run node scripts from the repository.
+  Results are labelled:
+  - High: the settings.json was written by another process (for example git clone or an npm postinstall script) and
+    the command ran at session start.
+  - Medium: the settings.json was written by another process and the agent later ran the script or download.
+  - Medium: the command ran at session start with no recent settings.json write (a hook that was already present).
+  Developers also configure legitimate hooks, so review the hook command and the settings.json writer before treating
+  a result as malicious. This query complements "MCP client configuration written by an unexpected process" (MCP server
+  config files) and "AI coding CLI launched with permission bypass by a package manager process".
+  False positives and exclusions:
+  - Developers configure legitimate SessionStart hooks (builds, linters, env setup). Review the hook command
+    (ProcessCommandLine) and the settings.json writer (ConfigWriter): an interactive editor or the developer's own
+    shell writing the config and running a recognizable in-repo command is expected activity.
+  - Editor settings are out of scope. VS Code user/workspace settings.json live under %APPDATA%\Code\User or a
+    project .vscode folder; Signal 1 is scoped to /.claude/ and /.gemini/, so routine editor saves do not match.
+  - Writes by the agent itself (claude/gemini, or node running claude-code/gemini-cli) are already excluded, so the
+    agent rewriting its own settings during normal use does not alert.
+  - Trusted package postinstall: an npm/yarn install can legitimately write a hook and spawn node/shells. This is the
+    supply-chain pattern the query targets, so tune per environment by excluding known internal registries or signed
+    publishers rather than the technique itself.
+  Timing heuristic limits:
+  - The 30s StartupWindow is a heuristic: a slow cold start can push the child past 30s (false negative, though a
+    correlated config write still surfaces it as Medium), and an unrelated shell spawned within 30s of startup can
+    set AtSessionStart (false positive). Timing alone yields Medium, never High.
+  - The 24h correlation joins on DeviceName only, so on a busy host a benign config write and an unrelated execution
+    can correlate coincidentally; ConfigWriter and ConfigPath are projected so an analyst can confirm the link.
+  References:
+  https://cloud.google.com/blog/topics/threat-intelligence/agentic-threat-activity-crosses-a-significant-threshold
+  https://www.sonarsource.com/blog/mini-shai-hulud-targets-ai-coding-agents/
+  https://code.claude.com/docs/en/hooks
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+      - DeviceFileEvents
+tactics:
+  - InitialAccess
+  - Execution
+  - Persistence
+relevantTechniques:
+  - T1195.002
+  - T1059
+  - T1546
+query: |
+  let timeframe = 7d;
+  let StartupWindowSeconds = 30;
+  let CorrelationWindow = 24h;
+  let AgentNames = dynamic(["claude", "claude.exe", "gemini", "gemini.exe"]);
+  let ChildNames = dynamic(["bash", "bash.exe", "sh", "sh.exe", "zsh", "cmd.exe", "powershell.exe", "pwsh", "pwsh.exe", "node", "node.exe", "python", "python.exe", "python3", "curl", "curl.exe", "wget"]);
+  let DownloadIndicators = dynamic(["http", "https", "curl", "wget", "iwr", "irm", "iex", "invoke-webrequest", "invoke-restmethod", "downloadstring", "frombase64string", "base64", "enc", "hidden"]);
+  // Signal 1 - Hook config planted: agent settings.json written by something other than the agent itself
+  let ConfigWrites = DeviceFileEvents
+  | where TimeGenerated >= ago(timeframe)
+  | where ActionType in ("FileCreated", "FileModified", "FileRenamed")
+  | where FileName in~ ("settings.json", "settings.local.json")
+  | extend NormalizedPath = replace_string(tolower(FolderPath), @"\", "/")
+  | where NormalizedPath contains "/.claude/" or NormalizedPath contains "/.gemini/"
+  | where not(InitiatingProcessFileName in~ (AgentNames))
+  | where not(InitiatingProcessFileName in~ ("node", "node.exe") and (InitiatingProcessCommandLine contains "claude-code" or InitiatingProcessCommandLine contains "gemini-cli"))
+  | project ConfigTime = TimeGenerated, DeviceName, ConfigPath = FolderPath, ConfigWriter = InitiatingProcessFileName, ConfigWriterCommandLine = InitiatingProcessCommandLine;
+  // Signal 2 - Agent executes a repo/agent-folder script or a download one-liner
+  let AgentExec = DeviceProcessEvents
+  | where TimeGenerated >= ago(timeframe)
+  | where InitiatingProcessFileName in~ (AgentNames)
+      or (InitiatingProcessFileName in~ ("node", "node.exe") and (InitiatingProcessCommandLine contains "claude-code" or InitiatingProcessCommandLine contains "gemini-cli"))
+  | where FileName in~ (ChildNames)
+  | extend ScriptFromAgentOrRepoDir = ProcessCommandLine matches regex @"(?i)\.(claude|gemini|github|vscode)[\\/][^\s""']+\.(js|mjs|cjs|ts|py|sh|ps1)"
+  | where ProcessCommandLine has_any (DownloadIndicators) or ScriptFromAgentOrRepoDir
+  // Signal 3 - Timing: SessionStart hooks fire seconds after the agent starts, before any user prompt
+  | extend SecondsAfterAgentStart = datetime_diff('second', TimeGenerated, InitiatingProcessCreationTime)
+  | extend AtSessionStart = SecondsAfterAgentStart between (0 .. StartupWindowSeconds)
+  | project ExecTime = TimeGenerated, DeviceName, AccountName, AccountDomain, AgentProcess = InitiatingProcessFileName, AgentCommandLine = InitiatingProcessCommandLine, FileName, ProcessCommandLine, SecondsAfterAgentStart, AtSessionStart, ReportId;
+  // Correlate: config written up to 24h before the agent ran the command, on the same device
+  AgentExec
+  | join kind=leftouter ConfigWrites on DeviceName
+  | extend ConfigMatched = isnotnull(ConfigTime) and ConfigTime between ((ExecTime - CorrelationWindow) .. ExecTime)
+  | summarize ConfigMatched = max(toint(ConfigMatched)), ConfigPath = take_anyif(ConfigPath, ConfigMatched), ConfigWriter = take_anyif(ConfigWriter, ConfigMatched)
+      by ExecTime, DeviceName, AccountName, AccountDomain, AgentProcess, AgentCommandLine, FileName, ProcessCommandLine, SecondsAfterAgentStart, AtSessionStart, ReportId
+  | where ConfigMatched == 1 or AtSessionStart
+  | extend Verdict = case(
+      ConfigMatched == 1 and AtSessionStart, "High - hook config planted, then executed at agent session start",
+      ConfigMatched == 1, "Medium - hook config planted, then agent ran script/download",
+      "Medium - agent ran script/download at session start (pre-existing hook)")
+  | extend AccountCustomEntity = AccountName
+  | extend HostCustomEntity = DeviceName
+  | project
+      ExecTime,
+      DeviceName,
+      HostCustomEntity,
+      AccountName,
+      AccountCustomEntity,
+      AccountDomain,
+      Verdict,
+      AgentProcess,
+      AgentCommandLine,
+      FileName,
+      ProcessCommandLine,
+      SecondsAfterAgentStart,
+      ConfigPath,
+      ConfigWriter,
+      ReportId
+  | sort by ExecTime desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+      - identifier: NTDomain
+        columnName: AccountDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostCustomEntity
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Syed Ishrar Ali
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]
