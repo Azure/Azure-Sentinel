@@ -8,10 +8,14 @@ comment with:
 
 - the verdict (exploitation, scanning, probing, or recognized research scanner)
   and its confidence,
-- total events and events in the last 7 days against the HoneyLabs sensor
-  network,
+- first-contact events and interactive sessions, each in total and in the
+  last 7 days,
 - first seen and last seen timestamps,
 - a link to the full report (payloads, CVEs probed, ports, fingerprints).
+
+It also tags the incident `HoneyLabs: <verdict>` and raises a Low, Medium or
+Informational incident to High when the verdict is malicious. An address
+HoneyLabs has never seen gets no comment.
 
 ## Prerequisites
 
