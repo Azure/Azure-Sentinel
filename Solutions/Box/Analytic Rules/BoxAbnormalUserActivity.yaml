@@ -1,7 +1,7 @@
 id: 1139230c-cf10-45db-b616-fed0d1415c05
 name: Box - Abmormal user activity
 description: |
-  'Detects spikes (deviations from avarage) in user activity.'
+  'Identifies users whose Box activity in the last hour is well above their own hourly average over the previous 14 days.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -17,38 +17,32 @@ tactics:
 relevantTechniques:
   - T1530
 query: |
-  let lbperiod_start = 14d;
-  let lbperiod_end = 24h;
-  let user_actions_1 = BoxEvents
-  | where EventEndTime between (ago(lbperiod_start) .. ago(lbperiod_end))
-  | summarize TotalEvents = count() by SourceName
-  | project TotalEvents, User = SourceName;
-  let user_actions_2 = BoxEvents
-  | where EventEndTime between (ago(lbperiod_start) .. ago(lbperiod_end))
-  | summarize TotalEvents = count() by SrcUserName
-  | project TotalEvents, User = SrcUserName;
-  let TotalActions = (union user_actions_1, user_actions_2)
-  | summarize TotalEvents = count() by User
-  | extend EventsPerDay = TotalEvents / 29
-  | extend k = 1;
-  let actions1_last_h = BoxEvents
-  | summarize TotalEventsH = count() by SourceName
-  | project TotalEventsH, User = SourceName;
-  let actions2_last_h = BoxEvents
-  | summarize TotalEventsH = count() by SourceName
-  | project TotalEventsH, User = SourceName;
-  let TotalActionsLastHour = (union actions1_last_h, actions2_last_h)
-  | summarize TotalEventsH = sum(TotalEventsH) by User
-  | extend k = 1;
-  TotalActions
-  | join (TotalActionsLastHour) on k
-  | where EventsPerDay > TotalEventsH
-  | project User
-  | extend AccountCustomEntity = User
+  let lookback = 14d;
+  let recent = 1h;
+  let min_events = 50;
+  let stdev_factor = 3;
+  BoxEvents
+  | where EventEndTime between (ago(lookback) .. now())
+  | where isnotempty(SrcUserUpn)
+  // hourly buckets are aligned to the run time, so the newest bucket is the last hour
+  | summarize Events = count(), SrcUserName = take_any(SrcUserName) by SrcUserUpn, Hour = bin_at(EventEndTime, recent, now())
+  | extend IsLastHour = Hour >= ago(recent)
+  // the baseline is the average over the earlier hours in which the user was active
+  | summarize EventsLastHour = sumif(Events, IsLastHour),
+              BaselineHours = countif(not(IsLastHour)),
+              BaselineAvg = avgif(Events, not(IsLastHour)),
+              BaselineStdev = stdevif(Events, not(IsLastHour)),
+              SrcUserName = take_any(SrcUserName)
+              by SrcUserUpn
+  // a user with no earlier activity has an empty baseline, treat it as zero
+  | extend BaselineAvg = iff(BaselineHours == 0, 0.0, BaselineAvg)
+  | where EventsLastHour >= min_events and EventsLastHour > BaselineAvg + stdev_factor * BaselineStdev
+  | project SrcUserUpn, SrcUserName, EventsLastHour, BaselineAvg = round(BaselineAvg, 2), BaselineStdev = round(BaselineStdev, 2), BaselineHours
+  | extend AccountCustomEntity = SrcUserUpn
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: AccountCustomEntity
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled
