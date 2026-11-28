@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                             |
 |-------------|--------------------------------|------------------------------------------------|
-| 3.2.3       | 19-11-2026                     | Updated **Data Connector** UI type from static to generic. |
+| 3.2.3       | 25-11-2026                     | Updated **Data Connector** UI type from static to generic. Restored workspace resource ID and deployment-context parameter definitions from package 3.0.7 to fix undefined ARM references. |
 | 3.2.2       | 22-10-2026                     | Added Defender XDR custom detections and V3.1 hybrid solution package. |
 | 3.0.7       | 11-11-2025                     | Add New **Analytic Rules** and **Hunting Queries** |
 | 3.0.6       | 12-11-2024                     | Modified datatype query for **Data Connector** |
