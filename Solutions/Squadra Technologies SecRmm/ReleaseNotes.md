@@ -1,3 +1,4 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.3.0       | 26-11-2026                     | Replaced the **Data Connector** with a Codeless Connector Framework (CCF) Push connector that uses the Logs Ingestion API (supports Microsoft Sentinel data lake). Removed the Azure Function / HTTP Data Collector API connector. Updated the **Workbook**: tabs for charts, all events, writes, online/offline, devices, authorization failures, administration changes, encryption, models and users; time range, computer and user filters; fixed the Microsoft Defender query. |
 | 3.0.0       | 15-11-2025                     | Added **Analytical Rule** 					 |
