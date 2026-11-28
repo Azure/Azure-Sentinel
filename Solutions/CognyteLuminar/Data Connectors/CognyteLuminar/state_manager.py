@@ -1,79 +1,92 @@
 """
-A module to manage state persistence using Azure File Share.
+state_manager.py
 
+Per-collection resume checkpoints persisted in an Azure File Share (the same
+share and file the previous connector version used, so an in-place upgrade
+keeps its position).
+
+File content (v2):
+
+    {"version": 2, "checkpoints": {"iocs": "<luminar ts>", "cyberfeeds": "..."}}
+
+Legacy content (v1) was a bare Luminar timestamp string that applied to every
+collection; it is migrated transparently on first read.
 """
 
+from __future__ import annotations
+
+import json
+import logging
+from typing import Dict, Optional
+
 from azure.core.exceptions import ResourceNotFoundError
-from azure.storage.fileshare import ShareClient
-from azure.storage.fileshare import ShareFileClient
+from azure.storage.fileshare import ShareClient, ShareFileClient
+
+logger = logging.getLogger(__name__)
+
+STATE_VERSION = 2
+
 
 class StateManager:
-    """
-    A class to manage state persistence using Azure File Share.
-
-    This class provides methods to store and retrieve a marker in an Azure File Share,
-    ensuring that the state is maintained across function executions.
-
-    Attributes:
-        share_cli (ShareClient): Client to interact with the Azure File Share.
-        file_cli (ShareFileClient): Client to interact with the specific state marker file.
-
-    Methods:
-        post(marker_text: str):
-            Uploads a state marker to the file. If the share does not exist, it creates one first.
-
-        get() -> str | None:
-            Retrieves the stored state marker from the file. Returns None if the
-             file does not exist.
-    """
-
     def __init__(
         self,
         connection_string: str,
         share_name: str = "funcstatemarkershare",
         file_path: str = "funcstatemarkerfile",
     ):
-        """
-        Initializes the StateManager with the Azure File Share connection.
-
-        Args:
-            connection_string (str): Azure Storage connection string.
-            share_name (str, optional): Name of the Azure File Share.
-              Defaults to "funcstatemarkershare".
-            file_path (str, optional): Path to the state marker file.
-              Defaults to "funcstatemarkerfile".
-        """
         self.share_cli = ShareClient.from_connection_string(
-            conn_str=connection_string, share_name=share_name, is_emulated=True
+            conn_str=connection_string, share_name=share_name
         )
         self.file_cli = ShareFileClient.from_connection_string(
-            conn_str=connection_string,
-            share_name=share_name,
-            file_path=file_path,
-            is_emulated=True,
+            conn_str=connection_string, share_name=share_name, file_path=file_path
         )
 
-    def post(self, marker_text: str):
-        """
-        Stores a marker in the Azure File Share. If the share does not exist, it creates one.
+    # ----- raw file access -----
 
-        Args:
-            marker_text (str): The text to be stored as a state marker.
-        """
-        try:
-            self.file_cli.upload_file(marker_text)
-        except ResourceNotFoundError:
-            self.share_cli.create_share()
-            self.file_cli.upload_file(marker_text)
-
-    def get(self) -> str | None:
-        """
-        Retrieves the stored state marker.
-
-        Returns:
-            str | None: The state marker text if found, otherwise None.
-        """
+    def _read_raw(self) -> Optional[str]:
         try:
             return self.file_cli.download_file().readall().decode()
         except ResourceNotFoundError:
             return None
+
+    def _write_raw(self, text: str) -> None:
+        try:
+            self.file_cli.upload_file(text)
+        except ResourceNotFoundError:
+            self.share_cli.create_share()
+            self.file_cli.upload_file(text)
+
+    # ----- checkpoint API -----
+
+    def load(self) -> Dict[str, str]:
+        """Return {collection_alias: luminar_timestamp}. Empty if no state."""
+        raw = self._read_raw()
+        if raw is None or not raw.strip():
+            return {}
+        text = raw.strip()
+        try:
+            data = json.loads(text)
+        except ValueError:
+            data = None
+        if isinstance(data, dict) and isinstance(data.get("checkpoints"), dict):
+            return {
+                k: v
+                for k, v in data["checkpoints"].items()
+                if isinstance(k, str) and isinstance(v, str) and v
+            }
+        # v1: a bare timestamp that applied to every collection.
+        logger.info(
+            "Migrating legacy single checkpoint %r to per-collection state", text
+        )
+        return {"iocs": text, "cyberfeeds": text}
+
+    def save(self, checkpoints: Dict[str, str]) -> None:
+        payload = {"version": STATE_VERSION, "checkpoints": dict(checkpoints)}
+        self._write_raw(json.dumps(payload, sort_keys=True))
+
+    # Backwards-compatible helpers used by older callers.
+    def get(self) -> Optional[str]:
+        return self._read_raw()
+
+    def post(self, marker_text: str) -> None:
+        self._write_raw(marker_text)

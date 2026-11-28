@@ -1,53 +1,49 @@
 {
     "id": "CognyteLuminar",
-    "title": "Luminar IOCs and Leaked Credentials",
+    "title": "Cognyte Luminar Threat Intelligence",
     "publisher": "Cognyte Technologies Israel Ltd",
-    "descriptionMarkdown": "Luminar IOCs and Leaked Credentials connector allows integration of intelligence-based IOC data and customer-related leaked records identified by Luminar.",
+    "descriptionMarkdown": "The Cognyte Luminar connector pulls STIX 2.1 indicators of compromise and their threat context (threat actors, identities and relationships) from the Luminar IOCs and Cyber Feeds collections and uploads them to Microsoft Sentinel threat intelligence through the STIX objects upload API. Data lands in the ThreatIntelIndicators and ThreatIntelObjects tables.",
     "graphQueries": [
         {
-            "metricName": "Cognyte Luminar Threat Indicators data received",
-            "legend": "ThreatIntelligenceIndicator | where SourceSystem contains 'Luminar'",
-            "baseQuery": "ThreatIntelligenceIndicator | where SourceSystem contains 'Luminar'"
+            "metricName": "Cognyte Luminar indicators received",
+            "legend": "ThreatIntelIndicators",
+            "baseQuery": "ThreatIntelIndicators | where SourceSystem == 'Cognyte Luminar'"
         },
         {
-            "metricName": "Non-Cognyte Luminar Threat Indicators data received",
-            "legend": "ThreatIntelligenceIndicator | where SourceSystem !contains 'Luminar'",
-            "baseQuery": "ThreatIntelligenceIndicator | where SourceSystem !contains 'Luminar'"
+            "metricName": "Cognyte Luminar STIX objects received",
+            "legend": "ThreatIntelObjects",
+            "baseQuery": "ThreatIntelObjects | where SourceSystem == 'Cognyte Luminar'"
         }
     ],
     "sampleQueries": [
         {
-            "description": "Cognyte Luminar Based Indicators Events - All Cognyte Luminar indicators in Microsoft Sentinel Threat Intelligence.",
-            "query": "ThreatIntelligenceIndicator\n | where SourceSystem contains 'Luminar'\n | sort by TimeGenerated desc"
+            "description": "All Cognyte Luminar indicators (latest version of each)",
+            "query": "ThreatIntelIndicators\n| where SourceSystem == 'Cognyte Luminar'\n| summarize arg_max(TimeGenerated, *) by Id\n| where IsDeleted == false\n| project TimeGenerated, ObservableKey, ObservableValue, Confidence, ValidFrom, ValidUntil, Tags, Data"
         },
         {
-            "description": "Non-Cognyte Luminar Based Indicators Events - All Non-Cognyte Luminar indicators in Microsoft Sentinel Threat Intelligence.",
-            "query": "ThreatIntelligenceIndicator\n | where SourceSystem !contains 'Luminar'\n | sort by TimeGenerated desc"
+            "description": "Cognyte Luminar indicators by observable type",
+            "query": "ThreatIntelIndicators\n| where SourceSystem == 'Cognyte Luminar'\n| summarize arg_max(TimeGenerated, *) by Id\n| where IsDeleted == false\n| summarize count() by ObservableKey"
+        },
+        {
+            "description": "Cognyte Luminar threat actors and the identities they target",
+            "query": "let actors = ThreatIntelObjects | where SourceSystem == 'Cognyte Luminar' and StixType == 'threat-actor' | extend ActorId = tostring(Data.id), Actor = tostring(Data.name);\nlet rels = ThreatIntelObjects | where SourceSystem == 'Cognyte Luminar' and StixType == 'relationship' | extend Src = tostring(Data.source_ref), Tgt = tostring(Data.target_ref), Rel = tostring(Data.relationship_type);\nlet idents = ThreatIntelObjects | where SourceSystem == 'Cognyte Luminar' and StixType == 'identity' | extend IdentityId = tostring(Data.id), Target = tostring(Data.name);\nactors | join kind=inner rels on $left.ActorId == $right.Src | join kind=inner idents on $left.Tgt == $right.IdentityId | project Actor, Rel, Target"
         }
     ],
     "dataTypes": [
         {
-            "name": "ThreatIntelligenceIndicator",
-            "lastDataReceivedQuery": "ThreatIntelligenceIndicator\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            "name": "ThreatIntelIndicators",
+            "lastDataReceivedQuery": "ThreatIntelIndicators\n| where SourceSystem == 'Cognyte Luminar'\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+            "name": "ThreatIntelObjects",
+            "lastDataReceivedQuery": "ThreatIntelObjects\n| where SourceSystem == 'Cognyte Luminar'\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
         }
     ],
     "connectivityCriterias": [
         {
             "type": "IsConnectedQuery",
             "value": [
-                "ThreatIntelligenceIndicator\n            | where SourceSystem contains 'Luminar'\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
-            ]
-        },
-        {
-            "type": "IsConnectedQuery",
-            "value": [
-                "Report_links_data_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
-            ]
-        },
-        {
-            "type": "IsConnectedQuery",
-            "value": [
-                "ThreatIntelligenceIndicator\n             | where SourceSystem !contains 'Luminar'\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                "ThreatIntelIndicators\n| where SourceSystem == 'Cognyte Luminar'\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(30d)"
             ]
         }
     ],
@@ -67,42 +63,35 @@
                     "read": true,
                     "delete": true
                 }
-            },
-            {
-                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
-                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
-                "providerDisplayName": "Keys",
-                "scope": "Workspace",
-                "requiredPermissions": {
-                    "action": true
-                }
             }
         ],
         "customs": [
             {
-                "name": "Azure Subscription",
-                "description": "Azure Subscription with owner role is required to register an application in azure active directory() and assign role of contributor to app in resource group."
+                "name": "Microsoft Entra application",
+                "description": "An app registration (Application ID, Tenant ID, Client Secret) granted the **Microsoft Sentinel Contributor** role on the Log Analytics workspace. This is required by the [threat intelligence upload API](https://learn.microsoft.com/azure/sentinel/connect-threat-intelligence-upload-api)."
             },
             {
                 "name": "Microsoft.Web/sites permissions",
                 "description": "Read and write permissions to Azure Functions to create a Function App is required. [See the documentation to learn more about Azure Functions](https://docs.microsoft.com/azure/azure-functions/)."
             },
             {
-                "name": "REST API Credentials/permissions",
-                "description": "**Luminar Client ID**, **Luminar Client Secret** and **Luminar Account ID** are required."
+                "name": "Luminar API credentials",
+                "description": "**Luminar API Client ID**, **Luminar API Client Secret** and **Luminar API Account ID** are required. Contact luminar@cognyte.com for access."
             }
         ]
     },
     "instructionSteps": [
         {
             "title": "",
-            "description": ">**NOTE:** This connector uses Azure Functions to connect to the Cognyte Luminar API to pull Luminar IOCs and Leaked Credentials into Microsoft Sentinel. This might result in additional costs for data ingestion and for storing data in Azure Blob Storage costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) and [Azure Blob Storage pricing page](https://azure.microsoft.com/pricing/details/storage/blobs/) for details."
+            "description": ">**NOTE:** This connector uses Azure Functions to connect to the Cognyte Luminar TAXII API and upload STIX objects to Microsoft Sentinel threat intelligence (ThreatIntelIndicators and ThreatIntelObjects tables). This might result in additional costs for data ingestion and for Azure Functions and storage. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details."
         },
         {
             "title": "",
             "description": ">**(Optional Step)** Securely store workspace and API authorization key(s) or token(s) in Azure Key Vault. Azure Key Vault provides a secure mechanism to store and retrieve key values. [Follow these instructions](https://docs.microsoft.com/azure/app-service/app-service-key-vault-references) to use Azure Key Vault with an Azure Function App."
         },
         {
+            "title": "STEP 1 - Register a Microsoft Entra application and grant it access to the workspace",
+            "description": "1. In **Microsoft Entra ID > App registrations**, create a new registration and note the **Application (client) ID** and **Directory (tenant) ID**.\n2. Under **Certificates & secrets**, create a client secret and copy its value.\n3. Open the Log Analytics workspace used by Microsoft Sentinel, go to **Access control (IAM) > Add role assignment**, choose the **Microsoft Sentinel Contributor** role and assign it to the application.\n4. Copy the **Workspace ID** below; it is required by the Function App.",
             "instructions": [
                 {
                     "parameters": {
@@ -112,25 +101,16 @@
                         "label": "Workspace ID"
                     },
                     "type": "CopyableLabel"
-                },
-                {
-                    "parameters": {
-                        "fillWith": [
-                            "PrimaryKey"
-                        ],
-                        "label": "Primary Key"
-                    },
-                    "type": "CopyableLabel"
                 }
             ]
         },
         {
-            "title": "Option 1 - Azure Resource Manager (ARM) Template for Flex Consumption Plan",
-            "description": "Use this method for automated deployment of the data connector using an ARM Template.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-CognyteLuminar-azuredeployflex)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Application ID**, **Tenant ID**,**Client Secret**, **Luminar API Client ID**, **Luminar API Account ID**, **Luminar API Client Secret**, **Luminar Initial Fetch Date**, **TimeInterval** and deploy.\n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**.\n5. Click **Purchase** to deploy."
+            "title": "STEP 2 - Option 1 - Azure Resource Manager (ARM) Template for Flex Consumption Plan",
+            "description": "Use this method for automated deployment of the data connector using an ARM Template.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-CognyteLuminar-azuredeployflex)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Application ID**, **Tenant ID**, **Client Secret**, **Workspace ID**, **Luminar API Client ID**, **Luminar API Account ID**, **Luminar API Client Secret**, **Luminar Initial Fetch Date** and **TimeInterval**. Leave **Luminar Base URL**, **Luminar Collections**, **Default Indicator Validity Days**, **Default Confidence** and **TLP Level** at their defaults unless Cognyte advised otherwise.\n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**.\n5. Click **Purchase** to deploy."
         },
         {
-            "title": "Option 2 - Azure Resource Manager (ARM) Template for Premium Plan",
-            "description": "Use this method for automated deployment of the data connector using an ARM Template.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-CognyteLuminar-azuredeploypremium)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Application ID**, **Tenant ID**,**Client Secret**, **Luminar API Client ID**, **Luminar API Account ID**, **Luminar API Client Secret**, **Luminar Initial Fetch Date**, **TimeInterval** and deploy.\n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**.\n5. Click **Purchase** to deploy."
+            "title": "STEP 2 - Option 2 - Azure Resource Manager (ARM) Template for Premium Plan",
+            "description": "Use this method for automated deployment of the data connector using an ARM Template.\n\n1. Click the **Deploy to Azure** button below. \n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-CognyteLuminar-azuredeploypremium)\n2. Select the preferred **Subscription**, **Resource Group** and **Location**. \n3. Enter the **Application ID**, **Tenant ID**, **Client Secret**, **Workspace ID**, **Luminar API Client ID**, **Luminar API Account ID**, **Luminar API Client Secret**, **Luminar Initial Fetch Date** and **TimeInterval**. Leave **Luminar Base URL**, **Luminar Collections**, **Default Indicator Validity Days**, **Default Confidence** and **TLP Level** at their defaults unless Cognyte advised otherwise.\n4. Mark the checkbox labeled **I agree to the terms and conditions stated above**.\n5. Click **Purchase** to deploy."
         }
     ]
 }
