@@ -1118,6 +1118,42 @@ class DeploymentTests(unittest.TestCase):
         result = self._deploy_with_readback(enabled)
         self.assertEqual(0, result["succeeded"])
 
+    def test_graph_detection_payload_sets_and_cleans_workspace_id(self):
+        value = document()
+        payload = graph_detection_payload(
+            value, workspace_id=TARGET["workspaceCustomerId"]
+        )
+        self.assertEqual(TARGET["workspaceCustomerId"], payload["workspaceId"])
+
+        authored_arm = document()
+        authored_arm["properties"]["workspaceId"] = "[parameters('workspaceId')]"
+        cleaned = graph_detection_payload(authored_arm)
+        self.assertNotIn("workspaceId", cleaned)
+
+        overridden = graph_detection_payload(
+            authored_arm, workspace_id=TARGET["workspaceCustomerId"]
+        )
+        self.assertEqual(TARGET["workspaceCustomerId"], overridden["workspaceId"])
+
+    def test_deploy_sends_locked_workspace_customer_id_and_rejects_mismatched_readback(self):
+        def valid_workspace(readback):
+            readback["status"] = "disabled"
+
+        result = self._deploy_with_readback(valid_workspace)
+        self.assertEqual(1, result["succeeded"], result["results"][0])
+        self.assertEqual(
+            TARGET["workspaceCustomerId"],
+            result["results"][0]["workspaceId"],
+        )
+
+        def mismatched_workspace(readback):
+            readback["status"] = "disabled"
+            readback["workspaceId"] = "00000000-0000-4000-8000-000000000000"
+
+        failed = self._deploy_with_readback(mismatched_workspace)
+        self.assertEqual(0, failed["succeeded"])
+        self.assertFalse(failed["results"][0]["error"]["workspaceIdVerified"])
+
 
 if __name__ == "__main__":
     unittest.main()

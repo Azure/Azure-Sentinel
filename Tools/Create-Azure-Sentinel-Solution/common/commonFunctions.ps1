@@ -3321,7 +3321,7 @@ function GeneratePackage(
     Assert-V31VersionChecksPassed
     $packageSerializationDepth = $jsonConversionDepth
     if ($IncludeXdrDetections) {
-        $xdrDetectionCount = Add-XdrCustomDetectionsToSolution -SolutionName $solutionName -ContentToImport $contentToImport -Template $global:baseMainTemplate
+        $xdrDetectionCount = Add-XdrCustomDetectionsToSolution -SolutionName $solutionName -ContentToImport $contentToImport -Template $global:baseMainTemplate -UiDefinition $global:baseCreateUiDefinition
         Update-XdrDescriptionCount -Count $xdrDetectionCount
         $defenderWorkbookCount = Add-XdrDefenderWorkbooksToSolution -SolutionName $solutionName -ContentToImport $contentToImport -Template $global:baseMainTemplate
         if ($defenderWorkbookCount -gt 0) { $packageSerializationDepth = 100 }

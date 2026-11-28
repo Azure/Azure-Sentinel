@@ -151,7 +151,9 @@ def project_graph_tactics(
 
 def graph_detection_payload_with_projection(
     document: dict[str, Any],
-    *, package_context: dict[str, str] | None = None,
+    *,
+    package_context: dict[str, str] | None = None,
+    workspace_id: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Build a disabled Graph payload and return explicit projection diagnostics."""
     prepared = deepcopy(document)
@@ -173,6 +175,15 @@ def graph_detection_payload_with_projection(
         result["schedule"]["frequency"] = "PT0S"
     result["@odata.type"] = "#microsoft.graph.security.detectionRule"
     result["status"] = "disabled"
+    authored_workspace_id = result.get("workspaceId")
+    if isinstance(workspace_id, str) and workspace_id.strip():
+        result["workspaceId"] = workspace_id.strip()
+    elif isinstance(authored_workspace_id, str):
+        cleaned_ws = authored_workspace_id.strip()
+        if cleaned_ws and not cleaned_ws.startswith("["):
+            result["workspaceId"] = cleaned_ws
+        else:
+            result.pop("workspaceId", None)
     if package_context is not None:
         from solution_manager.authoring.dependencies import deployed_provenance
 
@@ -181,10 +192,17 @@ def graph_detection_payload_with_projection(
 
 
 def graph_detection_payload(
-    document: dict[str, Any], *, package_context: dict[str, str] | None = None,
+    document: dict[str, Any],
+    *,
+    package_context: dict[str, str] | None = None,
+    workspace_id: str | None = None,
 ) -> dict[str, Any]:
     """Compatibility wrapper returning only the projected Graph request body."""
-    payload, _ = graph_detection_payload_with_projection(document, package_context=package_context)
+    payload, _ = graph_detection_payload_with_projection(
+        document,
+        package_context=package_context,
+        workspace_id=workspace_id,
+    )
     return payload
 
 

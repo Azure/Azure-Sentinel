@@ -620,6 +620,48 @@ def test_same_type_changed_hash_count_uses_old_scope_only_with_fresh_evidence(ca
     assert execute(case, consent_reader=lambda: consent)["status"] == "arm-accepted-contract-pending"
 
 
+def test_plan_lab_arm_validation_binds_workspace_id_when_declared(case):
+    root = case["solution"]
+    template_path = root / "Package/mainTemplate.json"
+    template = json.loads(template_path.read_text())
+    template["parameters"]["workspaceId"] = {"type": "string", "defaultValue": ""}
+    template_path.write_text(json.dumps(template))
+    with zipfile.ZipFile(root / "Package/3.2.2.zip", "w") as archive:
+        archive.write(template_path, "mainTemplate.json")
+        archive.write(root / "Package/createUiDefinition.json", "createUiDefinition.json")
+    report = case["report"]
+    report["packageArtifactHashes"] = {
+        name: hashlib.sha256((root / report[name]).read_bytes()).hexdigest()
+        for name in report["packageArtifactHashes"]
+    }
+    report["packageArtifactsSha256"] = _canonical_sha256(report["packageArtifactHashes"])
+    (root / "Logs/packaging.v3_1.json").write_text(json.dumps(report))
+    for name in ("structure", "package"):
+        path = root / case["gates"][name]["path"]
+        payload = json.loads(path.read_text())
+        payload["packageArtifactsSha256"] = report["packageArtifactsSha256"]
+        path.write_text(json.dumps(payload))
+        case["gates"][name]["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    with mock.patch.object(
+        validation,
+        "_parse_build_validation_receipt",
+        return_value={"path": str(case["receipt"]), "sha256": hashlib.sha256(case["receipt"].read_bytes()).hexdigest()},
+    ):
+        case["candidate"] = validation.create_arm_candidate(
+            CONTEXT,
+            solution=root,
+            package_report="Logs/packaging.v3_1.json",
+            validation_receipt=case["receipt"],
+            prerequisite_evidence=case["gates"],
+        )
+    current = plan(case)
+    assert current["parameters"]["workspaceId"] == TARGET["workspaceCustomerId"]
+    missing_ws_id = {**TARGET, "workspaceCustomerId": ""}
+    with pytest.raises(ValueError, match="selected lab requires complete"):
+        plan(case, target=missing_ws_id)
+
+
+
 def test_powershell_native_arm_route_still_calls_original_validator():
     source = (ROOT / ".script/local-validation/build-and-validate.ps1").read_text()
     section = source.split("# ARM-TTK Validator (local", 1)[1].split("# STEP 4:", 1)[0]
