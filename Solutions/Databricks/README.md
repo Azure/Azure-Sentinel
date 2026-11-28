@@ -37,7 +37,11 @@ Rows appear within 5 to 15 minutes of the next Databricks file landing in S3. Ob
 
 ## Validation
 
-The table schema and the AWS trust pattern were verified against a live Microsoft Sentinel workspace and AWS account with Databricks-shaped data (410 events, historical and live) on 7 October 2026. The table, the data collection rule with this transform and the connector definition were deployed to a live workspace on 10 October 2026.
+- 7 October 2026: the table schema, data collection rule transform and AWS trust pattern were tested against a live Microsoft Sentinel workspace and AWS account with Databricks-format audit data (410 events, historical and live).
+- 10 October 2026: the connector definition, table and data collection rule were deployed to a live workspace.
+- Since 21 October 2026: the connector has been running in a production environment, with the S3 poller ingesting Databricks on AWS audit logs into `DatabricksAudit_CL` and analytic rules running on the table.
+
+To check your own installation, use the queries in step 6 of `Data Connectors/README.md`.
 
 ## Support
 
